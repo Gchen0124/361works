@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ZoomIn, ZoomOut, Calendar, Grid } from 'lucide-react';
 import { format, addDays, startOfYear } from 'date-fns';
+import { dateToDay } from '@/hooks/useJournalData';
 
 interface ZoomControlsProps {
   visibleBlocks: number;
@@ -59,8 +60,8 @@ export default function ZoomControls({
   };
 
   const getPreviewContent = (date: Date) => {
-    const dateKey = format(date, 'yyyy-MM-dd');
-    const content = journalEntries[dateKey];
+    const dayKey = dateToDay(date, currentYear || new Date().getFullYear());
+    const content = journalEntries[dayKey];
     if (!content) return null;
     return content.length > 50 ? content.substring(0, 47) + '...' : content;
   };

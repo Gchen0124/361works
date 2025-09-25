@@ -8,10 +8,18 @@ sqlite.pragma("journal_mode = WAL");
 
 export const db = drizzle(sqlite, { schema });
 
-// Run migrations on startup
+// Run migrations on startup - skip if tables already exist
 try {
-  migrate(db, { migrationsFolder: "./drizzle" });
-  console.log("✅ Database migrations completed successfully");
+  const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+  const tableNames = tables.map((t: any) => t.name);
+
+  if (!tableNames.includes('journal_plan_matrix') || !tableNames.includes('journal_reality_matrix')) {
+    migrate(db, { migrationsFolder: "./drizzle" });
+    console.log("✅ Database migrations completed successfully");
+  } else {
+    console.log("✅ Database tables already exist, skipping migrations");
+  }
 } catch (error) {
-  console.error("❌ Database migration failed:", error);
+  console.warn("⚠️  Database migration warning:", error);
+  console.log("📄 Continuing with existing database schema...");
 }

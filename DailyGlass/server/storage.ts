@@ -58,6 +58,7 @@ export interface IStorage {
   }>;
 }
 
+// Simplified storage interface - no more complex conversions
 export class SqliteStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
@@ -93,9 +94,14 @@ export class SqliteStorage implements IStorage {
   // Matrix journal operations
   async createPlanSnapshot(entry: InsertJournalPlanMatrix): Promise<JournalPlanMatrix> {
     try {
+      // Direct mapping - day_contents already matches database columns!
       const result = await db.insert(journalPlanMatrix).values({
-        ...entry,
-        total_planned_days: Object.values(entry.day_contents).filter(content => content !== null && content !== '').length
+        user_id: entry.user_id,
+        snapshot_timestamp: entry.snapshot_timestamp,
+        year: entry.year,
+        ...entry.day_contents, // Direct spread - no conversion needed!
+        total_planned_days: Object.values(entry.day_contents).filter(content => content !== null && content !== '').length,
+        metadata: entry.metadata
       }).returning();
 
       const planSnapshot = result[0];
@@ -106,7 +112,11 @@ export class SqliteStorage implements IStorage {
       // Update daily snapshot
       await this.updateDailySnapshotAfterPlan(entry.user_id, entry.year, entry.day_contents);
 
-      return planSnapshot;
+      // Direct return with day_contents
+      return {
+        ...planSnapshot,
+        day_contents: entry.day_contents
+      };
     } catch (error) {
       console.error("Error creating plan snapshot:", error);
       throw error;
@@ -115,9 +125,14 @@ export class SqliteStorage implements IStorage {
 
   async createRealitySnapshot(entry: InsertJournalRealityMatrix): Promise<JournalRealityMatrix> {
     try {
+      // Direct mapping - day_contents already matches database columns!
       const result = await db.insert(journalRealityMatrix).values({
-        ...entry,
-        total_reality_days: Object.values(entry.day_contents).filter(content => content !== null && content !== '').length
+        user_id: entry.user_id,
+        snapshot_timestamp: entry.snapshot_timestamp,
+        year: entry.year,
+        ...entry.day_contents, // Direct spread - no conversion needed!
+        total_reality_days: Object.values(entry.day_contents).filter(content => content !== null && content !== '').length,
+        metadata: entry.metadata
       }).returning();
 
       const realitySnapshot = result[0];
@@ -128,7 +143,11 @@ export class SqliteStorage implements IStorage {
       // Update daily snapshot
       await this.updateDailySnapshotAfterReality(entry.user_id, entry.year, entry.day_contents);
 
-      return realitySnapshot;
+      // Direct return with day_contents
+      return {
+        ...realitySnapshot,
+        day_contents: entry.day_contents
+      };
     } catch (error) {
       console.error("Error creating reality snapshot:", error);
       throw error;

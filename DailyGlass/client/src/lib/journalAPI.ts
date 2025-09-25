@@ -1,13 +1,13 @@
 import { apiRequest } from '@/lib/queryClient';
 import type { JournalMode, JournalEntries } from '@/hooks/useJournalData';
 
-// Types for API communication
+// Types for API communication - now aligned with database structure
 export interface JournalSnapshot {
   id?: number;
   user_id: string;
   snapshot_timestamp: Date;
   year: number;
-  day_contents: Record<string, string | null>;
+  day_contents: JournalEntries; // Now directly uses day_XXX format
   metadata?: Record<string, any>;
 }
 
@@ -16,59 +16,17 @@ export interface DailySnapshot {
   user_id: string;
   snapshot_date: Date;
   year: number;
-  latest_plan_contents: JournalEntries;
-  latest_reality_contents: JournalEntries;
+  latest_plan_contents: JournalEntries; // Now directly uses day_XXX format
+  latest_reality_contents: JournalEntries; // Now directly uses day_XXX format
   plan_last_updated?: Date | null;
   reality_last_updated?: Date | null;
   completion_rate?: number;
 }
 
-// Helper function to convert JournalEntries to 365-day format
-function convertToMatrix(entries: JournalEntries): Record<string, string | null> {
-  const matrix: Record<string, string | null> = {};
-
-  // Initialize all days as null
-  for (let i = 1; i <= 365; i++) {
-    const dayKey = `day_${String(i).padStart(3, '0')}`;
-    matrix[dayKey] = null;
-  }
-
-  // Fill in the actual entries
-  Object.entries(entries).forEach(([dateKey, content]) => {
-    const date = new Date(dateKey);
-    if (!isNaN(date.getTime())) {
-      const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
-      if (dayOfYear >= 1 && dayOfYear <= 365) {
-        const dayKey = `day_${String(dayOfYear).padStart(3, '0')}`;
-        matrix[dayKey] = content;
-      }
-    }
-  });
-
-  return matrix;
-}
-
-// Helper function to convert matrix format back to JournalEntries
-function convertFromMatrix(matrix: Record<string, string | null>, year: number): JournalEntries {
-  const entries: JournalEntries = {};
-
-  Object.entries(matrix).forEach(([dayKey, content]) => {
-    if (content && content.trim()) {
-      const dayNumber = parseInt(dayKey.replace('day_', ''));
-      if (!isNaN(dayNumber) && dayNumber >= 1 && dayNumber <= 365) {
-        const date = new Date(year, 0, dayNumber);
-        const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-        entries[dateKey] = content;
-      }
-    }
-  });
-
-  return entries;
-}
-
 export class JournalAPI {
   private static instance: JournalAPI;
   private userId: string = 'default-user'; // In a real app, this would come from auth
+  private baseURL: string = 'http://localhost:5001'; // Backend server URL
 
   static getInstance(): JournalAPI {
     if (!JournalAPI.instance) {
@@ -84,7 +42,7 @@ export class JournalAPI {
       user_id: this.userId,
       snapshot_timestamp: new Date(),
       year,
-      day_contents: convertToMatrix(entries),
+      day_contents: entries, // Direct pass-through - no conversion needed!
       metadata: {
         mode,
         entry_count: Object.keys(entries).length,
@@ -93,7 +51,7 @@ export class JournalAPI {
     };
 
     try {
-      const response = await apiRequest('POST', endpoint, snapshot);
+      const response = await apiRequest('POST', `${this.baseURL}${endpoint}`, snapshot);
       const result = await response.json();
       console.log(`✅ Saved ${mode} snapshot with ${Object.keys(entries).length} entries`);
       return result;
@@ -105,16 +63,12 @@ export class JournalAPI {
 
   async getDailySnapshot(year: number): Promise<DailySnapshot | null> {
     try {
-      const response = await apiRequest('GET', `/api/matrix/${this.userId}/${year}/daily`);
+      const response = await apiRequest('GET', `${this.baseURL}/api/matrix/${this.userId}/${year}/daily`);
       const result = await response.json();
 
       if (result) {
-        // Convert matrix format back to JournalEntries
-        return {
-          ...result,
-          latest_plan_contents: convertFromMatrix(result.latest_plan_contents || {}, year),
-          latest_reality_contents: convertFromMatrix(result.latest_reality_contents || {}, year)
-        };
+        // Direct pass-through - no conversion needed!
+        return result;
       }
       return null;
     } catch (error) {
@@ -130,13 +84,11 @@ export class JournalAPI {
     const endpoint = mode === 'plan' ? `/api/matrix/${this.userId}/${year}/plans` : `/api/matrix/${this.userId}/${year}/realities`;
 
     try {
-      const response = await apiRequest('GET', endpoint);
+      const response = await apiRequest('GET', `${this.baseURL}${endpoint}`);
       const results = await response.json();
 
-      return results.map((snapshot: any) => ({
-        ...snapshot,
-        day_contents: convertFromMatrix(snapshot.day_contents || {}, year)
-      }));
+      // Direct pass-through - no conversion needed!
+      return results;
     } catch (error) {
       console.error(`❌ Failed to get ${mode} snapshots:`, error);
       throw error;
@@ -145,7 +97,7 @@ export class JournalAPI {
 
   async getTimeline(year: number): Promise<any[]> {
     try {
-      const response = await apiRequest('GET', `/api/timemachine/${this.userId}/${year}/timeline`);
+      const response = await apiRequest('GET', `${this.baseURL}/api/timemachine/${this.userId}/${year}/timeline`);
       return await response.json();
     } catch (error) {
       console.error('❌ Failed to get timeline:', error);
@@ -159,7 +111,7 @@ export class JournalAPI {
         ? `/api/export/${this.userId}/${year}/matrix-csv`
         : `/api/export/${this.userId}/${year}`;
 
-      const response = await apiRequest('GET', endpoint);
+      const response = await apiRequest('GET', `${this.baseURL}${endpoint}`);
 
       if (format === 'csv') {
         return await response.text();
@@ -174,7 +126,7 @@ export class JournalAPI {
 
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await apiRequest('GET', '/api/health');
+      const response = await apiRequest('GET', `${this.baseURL}/api/health`);
       const result = await response.json();
       return result.status === 'ok';
     } catch (error) {

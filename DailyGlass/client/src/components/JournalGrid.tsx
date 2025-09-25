@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { addDays, startOfYear, format } from 'date-fns';
 import JournalBlock from './JournalBlock';
 import type { JournalMode } from '@/hooks/useJournalData';
+import { dateToDay } from '@/hooks/useJournalData';
 
 interface JournalGridProps {
   visibleBlocks: number;
@@ -103,10 +104,10 @@ export default function JournalGrid({
         }}
       >
         {visibleDates.map((date, index) => {
-          const dateKey = format(date, 'yyyy-MM-dd');
+          const dayKey = dateToDay(date, year);
           return (
             <div
-              key={dateKey}
+              key={dayKey}
               className="animate-fade-in group/item"
               style={{
                 animationDelay: `${index * (visibleBlocks > 100 ? 0.005 : 0.02)}s`,
@@ -115,7 +116,7 @@ export default function JournalGrid({
             >
               <JournalBlock
                 date={date}
-                initialContent={entries[dateKey] || ''}
+                initialContent={entries[dayKey] || ''}
                 onContentChange={(content) => onContentChange(date, content)}
                 size={blockSize}
                 isVisible={true}

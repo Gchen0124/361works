@@ -3,7 +3,40 @@ import { format } from 'date-fns';
 import { journalAPI } from '@/lib/journalAPI';
 
 export type JournalMode = 'plan' | 'reality';
-export type JournalEntries = Record<string, string>;
+// Updated to use day_XXX format aligned with database structure
+export type JournalEntries = Record<string, string>; // day_001, day_002, etc.
+
+// Helper functions for date/day conversion
+export function dateToDay(date: Date, year: number): string {
+  const dayOfYear = Math.floor((date.getTime() - new Date(year, 0, 0).getTime()) / (1000 * 60 * 60 * 24));
+  return `day_${String(dayOfYear).padStart(3, '0')}`;
+}
+
+export function dayToDate(dayKey: string, year: number): Date {
+  const dayNumber = parseInt(dayKey.replace('day_', ''));
+  return new Date(year, 0, dayNumber);
+}
+
+// Migration function to convert old date format to new day format
+function migrateOldFormatToNewFormat(entries: Record<string, string>, year: number): Record<string, string> {
+  const migratedEntries: Record<string, string> = {};
+
+  Object.entries(entries).forEach(([key, content]) => {
+    if (key.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // Old date format (YYYY-MM-DD)
+      const date = new Date(key);
+      if (!isNaN(date.getTime()) && date.getFullYear() === year) {
+        const dayKey = dateToDay(date, year);
+        migratedEntries[dayKey] = content;
+      }
+    } else if (key.startsWith('day_')) {
+      // Already new format
+      migratedEntries[key] = content;
+    }
+  });
+
+  return migratedEntries;
+}
 
 interface JournalData {
   planEntries: JournalEntries;
@@ -57,11 +90,11 @@ export function useJournalData(year: number): UseJournalDataReturn {
       try {
         // Load plan entries
         const savedPlanEntries = localStorage.getItem(`journal-plan-${year}`);
-        const planEntries = savedPlanEntries ? JSON.parse(savedPlanEntries) : {};
+        const planEntries = savedPlanEntries ? migrateOldFormatToNewFormat(JSON.parse(savedPlanEntries), year) : {};
 
         // Load reality entries
         const savedRealityEntries = localStorage.getItem(`journal-reality-${year}`);
-        const realityEntries = savedRealityEntries ? JSON.parse(savedRealityEntries) : {};
+        const realityEntries = savedRealityEntries ? migrateOldFormatToNewFormat(JSON.parse(savedRealityEntries), year) : {};
 
         // Load current mode preference
         const savedMode = localStorage.getItem('journal-current-mode') as JournalMode;
@@ -185,7 +218,7 @@ export function useJournalData(year: number): UseJournalDataReturn {
   }, []);
 
   const updateEntry = useCallback((date: Date, content: string) => {
-    const dateKey = format(date, 'yyyy-MM-dd');
+    const dayKey = dateToDay(date, year);
 
     setJournalData(prev => {
       const updatedData = { ...prev };
@@ -193,11 +226,11 @@ export function useJournalData(year: number): UseJournalDataReturn {
       if (prev.currentMode === 'plan') {
         updatedData.planEntries = {
           ...prev.planEntries,
-          [dateKey]: content
+          [dayKey]: content
         };
         // Remove empty entries
         if (!content.trim()) {
-          delete updatedData.planEntries[dateKey];
+          delete updatedData.planEntries[dayKey];
         }
 
         // Auto-save to database
@@ -205,11 +238,11 @@ export function useJournalData(year: number): UseJournalDataReturn {
       } else {
         updatedData.realityEntries = {
           ...prev.realityEntries,
-          [dateKey]: content
+          [dayKey]: content
         };
         // Remove empty entries
         if (!content.trim()) {
-          delete updatedData.realityEntries[dateKey];
+          delete updatedData.realityEntries[dayKey];
         }
 
         // Auto-save to database
@@ -227,10 +260,10 @@ export function useJournalData(year: number): UseJournalDataReturn {
   }, [journalData.currentMode, journalData.planEntries, journalData.realityEntries]);
 
   const getEntryForMode = useCallback((date: Date, mode: JournalMode): string => {
-    const dateKey = format(date, 'yyyy-MM-dd');
+    const dayKey = dateToDay(date, year);
     const entries = mode === 'plan' ? journalData.planEntries : journalData.realityEntries;
-    return entries[dateKey] || '';
-  }, [journalData.planEntries, journalData.realityEntries]);
+    return entries[dayKey] || '';
+  }, [journalData.planEntries, journalData.realityEntries, year]);
 
   const syncToDatabase = useCallback(async () => {
     if (!journalData.isOnline) {

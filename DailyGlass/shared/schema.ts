@@ -919,11 +919,20 @@ export const dayColumnsSchema = z.object({
   day_365: z.string().nullable().optional(),
 });
 
-export const insertJournalPlanMatrixSchema = createInsertSchema(journalPlanMatrix).extend({
+// Custom schema that accepts string timestamps and day_contents format
+export const insertJournalPlanMatrixSchema = z.object({
+  user_id: z.string(),
+  snapshot_timestamp: z.string().transform((str) => new Date(str)),
+  year: z.number(),
+  day_contents: z.record(z.string(), z.string().nullable()),
   metadata: z.record(z.string(), z.any()).optional(),
 });
 
-export const insertJournalRealityMatrixSchema = createInsertSchema(journalRealityMatrix).extend({
+export const insertJournalRealityMatrixSchema = z.object({
+  user_id: z.string(),
+  snapshot_timestamp: z.string().transform((str) => new Date(str)),
+  year: z.number(),
+  day_contents: z.record(z.string(), z.string().nullable()),
   metadata: z.record(z.string(), z.any()).optional(),
 });
 
