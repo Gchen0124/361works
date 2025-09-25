@@ -5,8 +5,8 @@ import CollapsibleSidebar from '@/components/CollapsibleSidebar';
 import { Button } from '@/components/ui/button';
 import { Moon, Sun, BookOpen, ChevronRight, ChevronLeft, Target, CheckCircle } from 'lucide-react';
 import { useJournalData, type JournalMode } from '@/hooks/useJournalData';
-import { useTimeMachine } from '@/hooks/useTimeMachine';
-import TimeMachineBar from '@/components/TimeMachineBar';
+import { useTimeMachine } from '/src/hooks/useTimeMachine.ts';
+import TimeMachineBar from '/src/components/TimeMachineBar.tsx';
 
 export default function Journal() {
   const [visibleBlocks, setVisibleBlocks] = useState(30);
