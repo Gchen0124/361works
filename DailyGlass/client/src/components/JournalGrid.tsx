@@ -12,6 +12,7 @@ interface JournalGridProps {
   entries: Record<string, string>;
   onContentChange: (date: Date, content: string) => void;
   currentMode?: JournalMode;
+  readOnly?: boolean;
 }
 
 interface JournalEntry {
@@ -26,7 +27,8 @@ export default function JournalGrid({
   isDarkMode = false,
   entries,
   onContentChange,
-  currentMode = 'plan'
+  currentMode = 'plan',
+  readOnly = false
 }: JournalGridProps) {
 
   // Generate the visible dates
@@ -123,6 +125,7 @@ export default function JournalGrid({
                 showDateOnHover={blockSize === 'micro' || (isDarkMode && visibleBlocks >= 100)}
                 totalBlocks={visibleBlocks}
                 currentMode={currentMode}
+                readOnly={readOnly}
               />
             </div>
           );

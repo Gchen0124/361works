@@ -59,6 +59,20 @@ async function run() {
     metadata: { source: "smoke", mode: "reality" },
   });
 
+  // Validate full-state behavior: create second plan snapshot with only one change
+  const ts2 = new Date();
+  await storage.createPlanSnapshot({
+    user_id: userId,
+    snapshot_timestamp: ts2,
+    year,
+    day_contents: { day_001: "Plan – Overwrite Jan 1" },
+    metadata: { source: "smoke", mode: "plan", test: "full-state-merge" },
+  });
+
+  // Fetch the second snapshot and ensure previously set fields persist
+  const snap = await storage.getPlanSnapshot(userId, ts2.toISOString());
+  console.log("Full-state check -> day_010:", (snap as any)?.day_010);
+
   const afterPlan = await storage.getAllPlanSnapshots(userId, year);
   const afterReality = await storage.getAllRealitySnapshots(userId, year);
   const afterDaily = await storage.getDailySnapshot(userId, year);

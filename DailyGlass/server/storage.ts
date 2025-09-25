@@ -60,6 +60,56 @@ export interface IStorage {
 
 // Simplified storage interface - no more complex conversions
 export class SqliteStorage implements IStorage {
+  private dayKeys: string[] = Array.from({ length: 365 }, (_, i) => `day_${String(i + 1).padStart(3, '0')}`);
+
+  private emptyDayContents(): DayContents {
+    const contents: DayContents = {};
+    for (const k of this.dayKeys) contents[k] = null;
+    return contents;
+  }
+
+  private mergeFullContents(previous: DayContents | undefined, incoming: DayContents): DayContents {
+    const base = previous ? { ...previous } : this.emptyDayContents();
+    for (const k of Object.keys(incoming)) {
+      base[k] = incoming[k] ?? null;
+    }
+    for (const k of this.dayKeys) {
+      if (!(k in base)) base[k] = null;
+    }
+    return base;
+  }
+
+  private countNonEmpty(contents: DayContents): number {
+    return this.dayKeys.filter((k) => {
+      const v = contents[k];
+      return v !== null && v !== undefined && v !== '';
+    }).length;
+  }
+
+  private diffCount(before: DayContents | undefined, after: DayContents): number {
+    if (!before) return this.countNonEmpty(after);
+    let c = 0;
+    for (const k of this.dayKeys) {
+      if ((before[k] || null) !== (after[k] || null)) c++;
+    }
+    return c;
+  }
+
+  private async getLatestPlanSnapshotRow(userId: string, year: number) {
+    const rows = await db.select().from(journalPlanMatrix)
+      .where(and(eq(journalPlanMatrix.user_id, userId), eq(journalPlanMatrix.year, year)))
+      .orderBy(desc(journalPlanMatrix.snapshot_timestamp))
+      .limit(1);
+    return rows[0] as any | undefined;
+  }
+
+  private async getLatestRealitySnapshotRow(userId: string, year: number) {
+    const rows = await db.select().from(journalRealityMatrix)
+      .where(and(eq(journalRealityMatrix.user_id, userId), eq(journalRealityMatrix.year, year)))
+      .orderBy(desc(journalRealityMatrix.snapshot_timestamp))
+      .limit(1);
+    return rows[0] as any | undefined;
+  }
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     try {
@@ -94,29 +144,30 @@ export class SqliteStorage implements IStorage {
   // Matrix journal operations
   async createPlanSnapshot(entry: InsertJournalPlanMatrix): Promise<JournalPlanMatrix> {
     try {
-      // Direct mapping - day_contents already matches database columns!
+      const latestRow = await this.getLatestPlanSnapshotRow(entry.user_id, entry.year);
+      const latestContents = latestRow ? this.extractDayContentsFromRow(latestRow) : undefined;
+      const fullContents = this.mergeFullContents(latestContents, entry.day_contents);
+
       const result = await db.insert(journalPlanMatrix).values({
         user_id: entry.user_id,
         snapshot_timestamp: entry.snapshot_timestamp,
         year: entry.year,
-        ...entry.day_contents, // Direct spread - no conversion needed!
-        total_planned_days: Object.values(entry.day_contents).filter(content => content !== null && content !== '').length,
+        ...fullContents,
+        total_planned_days: this.countNonEmpty(fullContents),
         metadata: entry.metadata
       }).returning();
 
       const planSnapshot = result[0];
 
-      // Update timeline
-      await this.updateTimeline(entry.user_id, entry.year, planSnapshot.snapshot_timestamp, 'plan', Object.keys(entry.day_contents).length);
+      const changes = this.diffCount(latestContents, fullContents);
+      await this.updateTimeline(entry.user_id, entry.year, planSnapshot.snapshot_timestamp, 'plan', changes);
 
-      // Update daily snapshot
-      await this.updateDailySnapshotAfterPlan(entry.user_id, entry.year, entry.day_contents);
+      await this.updateDailySnapshotAfterPlan(entry.user_id, entry.year, fullContents);
 
-      // Direct return with day_contents
       return {
         ...planSnapshot,
-        day_contents: entry.day_contents
-      };
+        day_contents: fullContents
+      } as any;
     } catch (error) {
       console.error("Error creating plan snapshot:", error);
       throw error;
@@ -125,29 +176,30 @@ export class SqliteStorage implements IStorage {
 
   async createRealitySnapshot(entry: InsertJournalRealityMatrix): Promise<JournalRealityMatrix> {
     try {
-      // Direct mapping - day_contents already matches database columns!
+      const latestRow = await this.getLatestRealitySnapshotRow(entry.user_id, entry.year);
+      const latestContents = latestRow ? this.extractDayContentsFromRow(latestRow) : undefined;
+      const fullContents = this.mergeFullContents(latestContents, entry.day_contents);
+
       const result = await db.insert(journalRealityMatrix).values({
         user_id: entry.user_id,
         snapshot_timestamp: entry.snapshot_timestamp,
         year: entry.year,
-        ...entry.day_contents, // Direct spread - no conversion needed!
-        total_reality_days: Object.values(entry.day_contents).filter(content => content !== null && content !== '').length,
+        ...fullContents,
+        total_reality_days: this.countNonEmpty(fullContents),
         metadata: entry.metadata
       }).returning();
 
       const realitySnapshot = result[0];
 
-      // Update timeline
-      await this.updateTimeline(entry.user_id, entry.year, realitySnapshot.snapshot_timestamp, 'reality', Object.keys(entry.day_contents).length);
+      const changes = this.diffCount(latestContents, fullContents);
+      await this.updateTimeline(entry.user_id, entry.year, realitySnapshot.snapshot_timestamp, 'reality', changes);
 
-      // Update daily snapshot
-      await this.updateDailySnapshotAfterReality(entry.user_id, entry.year, entry.day_contents);
+      await this.updateDailySnapshotAfterReality(entry.user_id, entry.year, fullContents);
 
-      // Direct return with day_contents
       return {
         ...realitySnapshot,
-        day_contents: entry.day_contents
-      };
+        day_contents: fullContents
+      } as any;
     } catch (error) {
       console.error("Error creating reality snapshot:", error);
       throw error;
@@ -163,16 +215,7 @@ export class SqliteStorage implements IStorage {
         )).limit(1);
       const row = result[0];
       if (!row) return undefined;
-      const day_contents: DayContents = {};
-      for (let i = 1; i <= 365; i++) {
-        const key = `day_${String(i).padStart(3, '0')}` as keyof typeof journalPlanMatrix;
-        // @ts-expect-error dynamic access
-        const value = (row as any)[key];
-        if (value !== null && value !== undefined) {
-          // @ts-expect-error dynamic assign
-          day_contents[key as string] = value;
-        }
-      }
+      const day_contents = this.extractDayContentsFromRow(row as any);
       return { ...(row as any), day_contents } as any;
     } catch (error) {
       console.error("Error getting plan snapshot:", error);
@@ -189,16 +232,7 @@ export class SqliteStorage implements IStorage {
         )).limit(1);
       const row = result[0];
       if (!row) return undefined;
-      const day_contents: DayContents = {};
-      for (let i = 1; i <= 365; i++) {
-        const key = `day_${String(i).padStart(3, '0')}` as keyof typeof journalRealityMatrix;
-        // @ts-expect-error dynamic access
-        const value = (row as any)[key];
-        if (value !== null && value !== undefined) {
-          // @ts-expect-error dynamic assign
-          day_contents[key as string] = value;
-        }
-      }
+      const day_contents = this.extractDayContentsFromRow(row as any);
       return { ...(row as any), day_contents } as any;
     } catch (error) {
       console.error("Error getting reality snapshot:", error);
@@ -326,9 +360,9 @@ export class SqliteStorage implements IStorage {
     return {
       timestamp,
       year,
-      plan_contents: planSnapshot ? this.extractDayContentsFromRow(planSnapshot as any) : {},
-      reality_contents: realitySnapshot ? this.extractDayContentsFromRow(realitySnapshot as any) : {},
-      metadata: planSnapshot?.metadata || realitySnapshot?.metadata,
+      plan_contents: planSnapshot ? this.extractDayContentsFromRow(planSnapshot as any) : ({} as DayContents),
+      reality_contents: realitySnapshot ? this.extractDayContentsFromRow(realitySnapshot as any) : ({} as DayContents),
+      metadata: (planSnapshot?.metadata as Record<string, any> | undefined) || (realitySnapshot?.metadata as Record<string, any> | undefined),
     };
   }
 
@@ -382,7 +416,7 @@ export class SqliteStorage implements IStorage {
       snapshot_date: now,
       year,
       latest_plan_contents: dayContents,
-      latest_reality_contents: existing?.latest_reality_contents || {},
+      latest_reality_contents: (existing?.latest_reality_contents as any) || ({} as any),
       plan_last_updated: now,
       reality_last_updated: existing?.reality_last_updated || null,
     };
@@ -398,7 +432,7 @@ export class SqliteStorage implements IStorage {
       user_id: userId,
       snapshot_date: now,
       year,
-      latest_plan_contents: existing?.latest_plan_contents || {},
+      latest_plan_contents: (existing?.latest_plan_contents as any) || ({} as any),
       latest_reality_contents: dayContents,
       plan_last_updated: existing?.plan_last_updated || null,
       reality_last_updated: now,
@@ -439,11 +473,10 @@ export class SqliteStorage implements IStorage {
   }
 
   private extractDayContentsFromRow(row: any): DayContents {
-    const out: DayContents = {};
-    for (let i = 1; i <= 365; i++) {
-      const key = `day_${String(i).padStart(3, '0')}`;
+    const out: DayContents = {} as DayContents;
+    for (const key of this.dayKeys) {
       const v = row[key];
-      if (v !== null && v !== undefined && v !== '') out[key] = v;
+      out[key] = v ?? null;
     }
     return out;
   }

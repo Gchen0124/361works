@@ -5,6 +5,8 @@ import CollapsibleSidebar from '@/components/CollapsibleSidebar';
 import { Button } from '@/components/ui/button';
 import { Moon, Sun, BookOpen, ChevronRight, ChevronLeft, Target, CheckCircle } from 'lucide-react';
 import { useJournalData, type JournalMode } from '@/hooks/useJournalData';
+import { useTimeMachine } from '@/hooks/useTimeMachine';
+import TimeMachineBar from '@/components/TimeMachineBar';
 
 export default function Journal() {
   const [visibleBlocks, setVisibleBlocks] = useState(30);
@@ -26,6 +28,10 @@ export default function Journal() {
     syncToDatabase,
     loadFromDatabase
   } = useJournalData(currentYear);
+
+  // Time Machine state
+  const [isTimeMachine, setIsTimeMachine] = useState(false);
+  const tm = useTimeMachine(currentYear);
 
   // Dark mode based on current mode: plan = dark, reality = light
   const isDarkMode = currentMode === 'plan';
@@ -70,6 +76,12 @@ export default function Journal() {
 
     testLocalStorage();
   }, []);
+
+  // Entries source: live mode or time machine snapshot
+  const effectiveEntries = () => {
+    if (!isTimeMachine || !tm.snapshot) return getCurrentEntries();
+    return currentMode === 'plan' ? tm.snapshot.plan_contents : tm.snapshot.reality_contents;
+  };
 
   return (
     <div 
@@ -143,9 +155,29 @@ export default function Journal() {
                 <CheckCircle className="w-5 h-5 text-emerald-600" />
               )}
             </Button>
+            <Button
+              variant={isTimeMachine ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setIsTimeMachine(!isTimeMachine)}
+              className="ml-2 hover-elevate"
+              title="Toggle Time Machine"
+            >
+              {isTimeMachine ? 'Time Machine: ON' : 'Time Machine'}
+            </Button>
           </div>
         </div>
       </header>
+
+      {/* Time Machine Controls */}
+      {isTimeMachine && (
+        <div className="max-w-7xl mx-auto px-6 mt-4">
+          <TimeMachineBar
+            timeline={tm.timeline}
+            selectedIndex={tm.selectedIndex}
+            onIndexChange={(idx: number) => tm.setIndex(idx)}
+          />
+        </div>
+      )}
 
       {/* Collapsible Sidebar */}
       <CollapsibleSidebar
@@ -155,7 +187,7 @@ export default function Journal() {
         onStartDateChange={setStartDate}
         totalBlocks={365}
         currentYear={currentYear}
-        journalEntries={getCurrentEntries()}
+        journalEntries={effectiveEntries()}
         isCollapsed={isSidebarCollapsed}
         onToggleSidebar={toggleSidebar}
         currentMode={currentMode}
@@ -171,9 +203,10 @@ export default function Journal() {
             startDate={startDate}
             year={currentYear}
             isDarkMode={isDarkMode}
-            entries={getCurrentEntries()}
-            onContentChange={updateEntry}
+            entries={effectiveEntries()}
+            onContentChange={isTimeMachine ? () => {} : updateEntry}
             currentMode={currentMode}
+            readOnly={isTimeMachine}
           />
         </div>
       </main>

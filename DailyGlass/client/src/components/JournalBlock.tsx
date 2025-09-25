@@ -12,6 +12,7 @@ interface JournalBlockProps {
   showDateOnHover?: boolean;
   totalBlocks?: number;
   currentMode?: JournalMode;
+  readOnly?: boolean;
 }
 
 export default function JournalBlock({
@@ -23,7 +24,8 @@ export default function JournalBlock({
   isHovered = false,
   showDateOnHover = false,
   totalBlocks = 1,
-  currentMode = 'plan'
+  currentMode = 'plan',
+  readOnly = false
 }: JournalBlockProps) {
   const [content, setContent] = useState(initialContent);
   const [isFocused, setIsFocused] = useState(false);
@@ -146,6 +148,8 @@ export default function JournalBlock({
           onChange={(e) => handleContentChange(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
+          readOnly={!!readOnly}
+          disabled={!!readOnly}
           placeholder={
             size === 'xl'
               ? currentMode === 'plan'

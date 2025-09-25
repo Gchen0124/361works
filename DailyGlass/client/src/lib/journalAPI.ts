@@ -109,6 +109,22 @@ export class JournalAPI {
     }
   }
 
+  async getTimeMachineSnapshot(year: number, timestamp: string): Promise<{
+    timestamp: string;
+    year: number;
+    plan_contents: JournalEntries;
+    reality_contents: JournalEntries;
+    metadata?: Record<string, any>;
+  }> {
+    try {
+      const response = await apiRequest('GET', `${this.baseURL}/api/timemachine/${this.userId}/${year}/snapshot/${encodeURIComponent(timestamp)}`);
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Failed to get time machine snapshot:', error);
+      throw error;
+    }
+  }
+
   async exportData(year: number, format: 'json' | 'csv' = 'json'): Promise<any> {
     try {
       const endpoint = format === 'csv'

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ZoomControls from './ZoomControls';
+import type { JournalMode } from '@/hooks/useJournalData';
 import { startOfYear } from 'date-fns';
 
 interface CollapsibleSidebarProps {
@@ -14,6 +15,9 @@ interface CollapsibleSidebarProps {
   journalEntries?: Record<string, string>;
   isCollapsed: boolean;
   onToggleSidebar: () => void;
+  currentMode?: JournalMode;
+  planEntries?: Record<string, string>;
+  realityEntries?: Record<string, string>;
 }
 
 export default function CollapsibleSidebar({
