@@ -6,11 +6,12 @@ import { setupVite, serveStatic, log } from "./vite";
 const app = express();
 
 // Enable CORS (wider allowance in development for any localhost port)
+const allowAllCors = process.env.ALLOW_ALL_CORS === "1" || process.env.ALLOW_ALL_CORS === "true";
 const corsOptions =
-  app.get("env") === "development"
+  allowAllCors || app.get("env") === "development"
     ? { origin: true, credentials: true }
     : {
-        origin: ["http://localhost:5173", "http://localhost:3000"],
+        origin: ["http://localhost:5173", "http://localhost:3000", "http://localhost:5137"],
         credentials: true,
       };
 app.use(cors(corsOptions));
@@ -72,7 +73,7 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
+  const port = parseInt(process.env.PORT || '5001', 10);
   server.listen({
     port,
     host: "0.0.0.0",
