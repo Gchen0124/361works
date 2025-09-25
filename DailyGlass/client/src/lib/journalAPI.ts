@@ -26,7 +26,8 @@ export interface DailySnapshot {
 export class JournalAPI {
   private static instance: JournalAPI;
   private userId: string = 'default-user'; // In a real app, this would come from auth
-  private baseURL: string = 'http://localhost:5001'; // Backend server URL
+  // Backend server URL; configurable via Vite env for local differences (e.g., 5000/5001)
+  private baseURL: string = (import.meta as any)?.env?.VITE_API_BASE_URL || 'http://localhost:5001';
 
   static getInstance(): JournalAPI {
     if (!JournalAPI.instance) {

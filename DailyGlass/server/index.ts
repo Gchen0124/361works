@@ -5,11 +5,15 @@ import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
-// Enable CORS for frontend development
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'], // Allow frontend dev servers
-  credentials: true
-}));
+// Enable CORS (wider allowance in development for any localhost port)
+const corsOptions =
+  app.get("env") === "development"
+    ? { origin: true, credentials: true }
+    : {
+        origin: ["http://localhost:5173", "http://localhost:3000"],
+        credentials: true,
+      };
+app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
