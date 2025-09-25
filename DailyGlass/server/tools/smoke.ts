@@ -69,6 +69,10 @@ async function run() {
     daily: afterDaily ? 1 : 0,
     timeline: afterTimeline.length,
   });
+
+  const lastPlan = afterPlan[afterPlan.length - 1] as any;
+  console.log("lastPlan has day_001:", lastPlan?.day_001);
+  console.log("lastPlan.day_contents keys:", lastPlan?.day_contents ? Object.keys(lastPlan.day_contents) : null);
 }
 
 run().catch((err) => {

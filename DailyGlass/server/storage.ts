@@ -161,7 +161,19 @@ export class SqliteStorage implements IStorage {
           eq(journalPlanMatrix.user_id, userId),
           eq(journalPlanMatrix.snapshot_timestamp, new Date(timestamp))
         )).limit(1);
-      return result[0];
+      const row = result[0];
+      if (!row) return undefined;
+      const day_contents: DayContents = {};
+      for (let i = 1; i <= 365; i++) {
+        const key = `day_${String(i).padStart(3, '0')}` as keyof typeof journalPlanMatrix;
+        // @ts-expect-error dynamic access
+        const value = (row as any)[key];
+        if (value !== null && value !== undefined) {
+          // @ts-expect-error dynamic assign
+          day_contents[key as string] = value;
+        }
+      }
+      return { ...(row as any), day_contents } as any;
     } catch (error) {
       console.error("Error getting plan snapshot:", error);
       return undefined;
@@ -175,7 +187,19 @@ export class SqliteStorage implements IStorage {
           eq(journalRealityMatrix.user_id, userId),
           eq(journalRealityMatrix.snapshot_timestamp, new Date(timestamp))
         )).limit(1);
-      return result[0];
+      const row = result[0];
+      if (!row) return undefined;
+      const day_contents: DayContents = {};
+      for (let i = 1; i <= 365; i++) {
+        const key = `day_${String(i).padStart(3, '0')}` as keyof typeof journalRealityMatrix;
+        // @ts-expect-error dynamic access
+        const value = (row as any)[key];
+        if (value !== null && value !== undefined) {
+          // @ts-expect-error dynamic assign
+          day_contents[key as string] = value;
+        }
+      }
+      return { ...(row as any), day_contents } as any;
     } catch (error) {
       console.error("Error getting reality snapshot:", error);
       return undefined;
@@ -184,12 +208,21 @@ export class SqliteStorage implements IStorage {
 
   async getAllPlanSnapshots(userId: string, year: number): Promise<JournalPlanMatrix[]> {
     try {
-      return await db.select().from(journalPlanMatrix)
+      const rows = await db.select().from(journalPlanMatrix)
         .where(and(
           eq(journalPlanMatrix.user_id, userId),
           eq(journalPlanMatrix.year, year)
         ))
         .orderBy(journalPlanMatrix.snapshot_timestamp);
+      return rows.map((row: any) => {
+        const day_contents: DayContents = {};
+        for (let i = 1; i <= 365; i++) {
+          const key = `day_${String(i).padStart(3, '0')}`;
+          const value = row[key];
+          if (value !== null && value !== undefined) day_contents[key] = value;
+        }
+        return { ...row, day_contents } as any;
+      });
     } catch (error) {
       console.error("Error getting all plan snapshots:", error);
       return [];
@@ -198,12 +231,21 @@ export class SqliteStorage implements IStorage {
 
   async getAllRealitySnapshots(userId: string, year: number): Promise<JournalRealityMatrix[]> {
     try {
-      return await db.select().from(journalRealityMatrix)
+      const rows = await db.select().from(journalRealityMatrix)
         .where(and(
           eq(journalRealityMatrix.user_id, userId),
           eq(journalRealityMatrix.year, year)
         ))
         .orderBy(journalRealityMatrix.snapshot_timestamp);
+      return rows.map((row: any) => {
+        const day_contents: DayContents = {};
+        for (let i = 1; i <= 365; i++) {
+          const key = `day_${String(i).padStart(3, '0')}`;
+          const value = row[key];
+          if (value !== null && value !== undefined) day_contents[key] = value;
+        }
+        return { ...row, day_contents } as any;
+      });
     } catch (error) {
       console.error("Error getting all reality snapshots:", error);
       return [];
@@ -276,12 +318,16 @@ export class SqliteStorage implements IStorage {
   async getTimeMachineSnapshot(userId: string, timestamp: string, year: number): Promise<TimeMachineSnapshot> {
     const planSnapshot = await this.getPlanSnapshot(userId, timestamp);
     const realitySnapshot = await this.getRealitySnapshot(userId, timestamp);
+    try {
+      // debug log limited output
+      console.log("[TimeMachine] plan day_001:", (planSnapshot as any)?.day_001);
+    } catch {}
 
     return {
       timestamp,
       year,
-      plan_contents: planSnapshot?.day_contents || {},
-      reality_contents: realitySnapshot?.day_contents || {},
+      plan_contents: planSnapshot ? this.extractDayContentsFromRow(planSnapshot as any) : {},
+      reality_contents: realitySnapshot ? this.extractDayContentsFromRow(realitySnapshot as any) : {},
       metadata: planSnapshot?.metadata || realitySnapshot?.metadata,
     };
   }
@@ -390,6 +436,16 @@ export class SqliteStorage implements IStorage {
         return { day, before: beforeContent, after: afterContent, status: 'unchanged' as const };
       }
     });
+  }
+
+  private extractDayContentsFromRow(row: any): DayContents {
+    const out: DayContents = {};
+    for (let i = 1; i <= 365; i++) {
+      const key = `day_${String(i).padStart(3, '0')}`;
+      const v = row[key];
+      if (v !== null && v !== undefined && v !== '') out[key] = v;
+    }
+    return out;
   }
 }
 
