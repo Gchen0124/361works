@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
+import type { JournalMode } from '@/hooks/useJournalData';
 
 interface JournalBlockProps {
   date: Date;
@@ -10,17 +11,19 @@ interface JournalBlockProps {
   isHovered?: boolean;
   showDateOnHover?: boolean;
   totalBlocks?: number;
+  currentMode?: JournalMode;
 }
 
-export default function JournalBlock({ 
-  date, 
-  initialContent = '', 
-  onContentChange, 
+export default function JournalBlock({
+  date,
+  initialContent = '',
+  onContentChange,
   size,
   isVisible,
   isHovered = false,
   showDateOnHover = false,
-  totalBlocks = 1
+  totalBlocks = 1,
+  currentMode = 'plan'
 }: JournalBlockProps) {
   const [content, setContent] = useState(initialContent);
   const [isFocused, setIsFocused] = useState(false);
@@ -143,7 +146,19 @@ export default function JournalBlock({
           onChange={(e) => handleContentChange(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          placeholder={size === 'xl' ? 'What happened today? Take your time to write...' : size === 'micro' && totalBlocks > 100 ? '' : size === 'micro' ? '...' : 'What happened today?'}
+          placeholder={
+            size === 'xl'
+              ? currentMode === 'plan'
+                ? 'What do you want to accomplish today? Plan your day...'
+                : 'What actually happened today? Record your reality...'
+              : size === 'micro' && totalBlocks > 100
+                ? ''
+                : size === 'micro'
+                  ? '...'
+                  : currentMode === 'plan'
+                    ? 'Your plan...'
+                    : 'What happened?'
+          }
           className={`
             flex-1 w-full bg-transparent border-none outline-none resize-none
             text-foreground placeholder:text-muted-foreground

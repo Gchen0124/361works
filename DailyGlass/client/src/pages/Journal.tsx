@@ -3,61 +3,49 @@ import { startOfYear, format } from 'date-fns';
 import JournalGrid from '@/components/JournalGrid';
 import CollapsibleSidebar from '@/components/CollapsibleSidebar';
 import { Button } from '@/components/ui/button';
-import { Moon, Sun, BookOpen, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Moon, Sun, BookOpen, ChevronRight, ChevronLeft, Target, CheckCircle } from 'lucide-react';
+import { useJournalData, type JournalMode } from '@/hooks/useJournalData';
 
 export default function Journal() {
   const [visibleBlocks, setVisibleBlocks] = useState(30);
   const [startDate, setStartDate] = useState(startOfYear(new Date()));
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [journalEntries, setJournalEntries] = useState<Record<string, string>>({});
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const currentYear = new Date().getFullYear();
 
-  // Load journal entries for both grid and preview
-  useEffect(() => {
-    const savedEntries = localStorage.getItem(`journal-entries-${currentYear}`);
-    if (savedEntries) {
-      try {
-        const entries = JSON.parse(savedEntries);
-        setJournalEntries(entries);
-        console.log(`Loaded ${Object.keys(entries).length} journal entries for ${currentYear}`);
-      } catch (error) {
-        console.error('Failed to load journal entries:', error);
-        setJournalEntries({});
-      }
-    }
-  }, [currentYear]);
+  // Use the new journal data hook for plan/reality separation
+  const {
+    planEntries,
+    realityEntries,
+    currentMode,
+    isOnline,
+    lastSyncTimestamp,
+    setCurrentMode,
+    updateEntry,
+    getCurrentEntries,
+    getEntryForMode,
+    syncToDatabase,
+    loadFromDatabase
+  } = useJournalData(currentYear);
 
-  // Save journal entries whenever they change
-  useEffect(() => {
-    if (Object.keys(journalEntries).length > 0) {
-      localStorage.setItem(`journal-entries-${currentYear}`, JSON.stringify(journalEntries));
-      console.log(`Saved ${Object.keys(journalEntries).length} journal entries for ${currentYear}`);
-    }
-  }, [journalEntries, currentYear]);
+  // Dark mode based on current mode: plan = dark, reality = light
+  const isDarkMode = currentMode === 'plan';
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-    document.documentElement.classList.toggle('dark');
+  // Apply dark mode to document class
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  const toggleMode = () => {
+    const newMode: JournalMode = currentMode === 'plan' ? 'reality' : 'plan';
+    setCurrentMode(newMode);
   };
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
-  };
-
-  const handleJournalContentChange = (date: Date, content: string) => {
-    const dateKey = format(date, 'yyyy-MM-dd');
-    setJournalEntries(prev => {
-      const updated = {
-        ...prev,
-        [dateKey]: content
-      };
-      // Remove empty entries to keep localStorage clean
-      if (!content.trim()) {
-        delete updated[dateKey];
-      }
-      return updated;
-    });
   };
 
   // Test localStorage functionality on mount
@@ -114,11 +102,29 @@ export default function Journal() {
                 <BookOpen className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground" data-testid="app-title">
+                <h1 className="text-xl font-bold text-foreground flex items-center gap-2" data-testid="app-title">
                   365 Journal
+                  <span className={`text-sm px-2 py-1 rounded-full font-medium ${
+                    currentMode === 'plan'
+                      ? 'bg-indigo-500/20 text-indigo-300'
+                      : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                  }`}>
+                    {currentMode === 'plan' ? 'PLAN' : 'REALITY'}
+                  </span>
+                  <div className={`w-2 h-2 rounded-full ${
+                    isOnline ? 'bg-green-500' : 'bg-red-500'
+                  }`} title={isOnline ? 'Connected to database' : 'Offline - using localStorage only'} />
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Your year in words
+                  {currentMode === 'plan'
+                    ? 'Planning your year ahead'
+                    : 'Recording your reality'
+                  }
+                  {lastSyncTimestamp && (
+                    <span className="ml-2 text-xs opacity-70">
+                      Last sync: {lastSyncTimestamp.toLocaleTimeString()}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -126,14 +132,15 @@ export default function Journal() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={toggleDarkMode}
+              onClick={toggleMode}
               className="hover-elevate"
-              data-testid="button-theme-toggle"
+              data-testid="button-mode-toggle"
+              title={currentMode === 'plan' ? 'Switch to Reality Mode' : 'Switch to Plan Mode'}
             >
-              {isDarkMode ? (
-                <Sun className="w-5 h-5" />
+              {currentMode === 'plan' ? (
+                <Target className="w-5 h-5 text-indigo-300" />
               ) : (
-                <Moon className="w-5 h-5" />
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
               )}
             </Button>
           </div>
@@ -148,9 +155,12 @@ export default function Journal() {
         onStartDateChange={setStartDate}
         totalBlocks={365}
         currentYear={currentYear}
-        journalEntries={journalEntries}
+        journalEntries={getCurrentEntries()}
         isCollapsed={isSidebarCollapsed}
         onToggleSidebar={toggleSidebar}
+        currentMode={currentMode}
+        planEntries={planEntries}
+        realityEntries={realityEntries}
       />
 
       {/* Main Content - Full Width */}
@@ -161,8 +171,9 @@ export default function Journal() {
             startDate={startDate}
             year={currentYear}
             isDarkMode={isDarkMode}
-            entries={journalEntries}
-            onContentChange={handleJournalContentChange}
+            entries={getCurrentEntries()}
+            onContentChange={updateEntry}
+            currentMode={currentMode}
           />
         </div>
       </main>
@@ -171,7 +182,10 @@ export default function Journal() {
       <footer className="mt-16 py-8 border-t border-white/20 bg-white/5 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <p className="text-sm text-muted-foreground">
-            Capture your thoughts, one day at a time. All entries are saved locally in your browser.
+            {currentMode === 'plan'
+              ? 'Plan your days, one thought at a time. Your plans are saved locally and separately from reality.'
+              : 'Record what actually happened. Reality entries are saved locally and separately from plans.'
+            }
           </p>
         </div>
       </footer>

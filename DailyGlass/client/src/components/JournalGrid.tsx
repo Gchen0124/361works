@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { addDays, startOfYear, format } from 'date-fns';
 import JournalBlock from './JournalBlock';
+import type { JournalMode } from '@/hooks/useJournalData';
 
 interface JournalGridProps {
   visibleBlocks: number;
@@ -9,6 +10,7 @@ interface JournalGridProps {
   isDarkMode?: boolean;
   entries: Record<string, string>;
   onContentChange: (date: Date, content: string) => void;
+  currentMode?: JournalMode;
 }
 
 interface JournalEntry {
@@ -22,7 +24,8 @@ export default function JournalGrid({
   year = new Date().getFullYear(),
   isDarkMode = false,
   entries,
-  onContentChange
+  onContentChange,
+  currentMode = 'plan'
 }: JournalGridProps) {
 
   // Generate the visible dates
@@ -70,10 +73,14 @@ export default function JournalGrid({
         </span>
         <div className="flex items-center gap-4">
           <span>
-            {Object.keys(entries).length} entries saved
+            {Object.keys(entries).length} {currentMode === 'plan' ? 'plans' : 'reality entries'} saved
           </span>
-          <span className="text-xs px-2 py-1 bg-green-500/20 text-green-700 dark:text-green-300 rounded-full">
-            🔄 Auto-save enabled
+          <span className={`text-xs px-2 py-1 rounded-full ${
+            currentMode === 'plan'
+              ? 'bg-indigo-500/20 text-indigo-300'
+              : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+          }`}>
+            🔄 {currentMode === 'plan' ? 'Planning Mode' : 'Reality Mode'}
           </span>
         </div>
       </div>
@@ -114,6 +121,7 @@ export default function JournalGrid({
                 isVisible={true}
                 showDateOnHover={blockSize === 'micro' || (isDarkMode && visibleBlocks >= 100)}
                 totalBlocks={visibleBlocks}
+                currentMode={currentMode}
               />
             </div>
           );

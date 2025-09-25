@@ -1,0 +1,187 @@
+import { apiRequest } from '@/lib/queryClient';
+import type { JournalMode, JournalEntries } from '@/hooks/useJournalData';
+
+// Types for API communication
+export interface JournalSnapshot {
+  id?: number;
+  user_id: string;
+  snapshot_timestamp: Date;
+  year: number;
+  day_contents: Record<string, string | null>;
+  metadata?: Record<string, any>;
+}
+
+export interface DailySnapshot {
+  id?: number;
+  user_id: string;
+  snapshot_date: Date;
+  year: number;
+  latest_plan_contents: JournalEntries;
+  latest_reality_contents: JournalEntries;
+  plan_last_updated?: Date | null;
+  reality_last_updated?: Date | null;
+  completion_rate?: number;
+}
+
+// Helper function to convert JournalEntries to 365-day format
+function convertToMatrix(entries: JournalEntries): Record<string, string | null> {
+  const matrix: Record<string, string | null> = {};
+
+  // Initialize all days as null
+  for (let i = 1; i <= 365; i++) {
+    const dayKey = `day_${String(i).padStart(3, '0')}`;
+    matrix[dayKey] = null;
+  }
+
+  // Fill in the actual entries
+  Object.entries(entries).forEach(([dateKey, content]) => {
+    const date = new Date(dateKey);
+    if (!isNaN(date.getTime())) {
+      const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
+      if (dayOfYear >= 1 && dayOfYear <= 365) {
+        const dayKey = `day_${String(dayOfYear).padStart(3, '0')}`;
+        matrix[dayKey] = content;
+      }
+    }
+  });
+
+  return matrix;
+}
+
+// Helper function to convert matrix format back to JournalEntries
+function convertFromMatrix(matrix: Record<string, string | null>, year: number): JournalEntries {
+  const entries: JournalEntries = {};
+
+  Object.entries(matrix).forEach(([dayKey, content]) => {
+    if (content && content.trim()) {
+      const dayNumber = parseInt(dayKey.replace('day_', ''));
+      if (!isNaN(dayNumber) && dayNumber >= 1 && dayNumber <= 365) {
+        const date = new Date(year, 0, dayNumber);
+        const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+        entries[dateKey] = content;
+      }
+    }
+  });
+
+  return entries;
+}
+
+export class JournalAPI {
+  private static instance: JournalAPI;
+  private userId: string = 'default-user'; // In a real app, this would come from auth
+
+  static getInstance(): JournalAPI {
+    if (!JournalAPI.instance) {
+      JournalAPI.instance = new JournalAPI();
+    }
+    return JournalAPI.instance;
+  }
+
+  async saveSnapshot(mode: JournalMode, entries: JournalEntries, year: number): Promise<JournalSnapshot> {
+    const endpoint = mode === 'plan' ? '/api/matrix/plan' : '/api/matrix/reality';
+
+    const snapshot: Partial<JournalSnapshot> = {
+      user_id: this.userId,
+      snapshot_timestamp: new Date(),
+      year,
+      day_contents: convertToMatrix(entries),
+      metadata: {
+        mode,
+        entry_count: Object.keys(entries).length,
+        saved_at: new Date().toISOString()
+      }
+    };
+
+    try {
+      const response = await apiRequest('POST', endpoint, snapshot);
+      const result = await response.json();
+      console.log(`✅ Saved ${mode} snapshot with ${Object.keys(entries).length} entries`);
+      return result;
+    } catch (error) {
+      console.error(`❌ Failed to save ${mode} snapshot:`, error);
+      throw error;
+    }
+  }
+
+  async getDailySnapshot(year: number): Promise<DailySnapshot | null> {
+    try {
+      const response = await apiRequest('GET', `/api/matrix/${this.userId}/${year}/daily`);
+      const result = await response.json();
+
+      if (result) {
+        // Convert matrix format back to JournalEntries
+        return {
+          ...result,
+          latest_plan_contents: convertFromMatrix(result.latest_plan_contents || {}, year),
+          latest_reality_contents: convertFromMatrix(result.latest_reality_contents || {}, year)
+        };
+      }
+      return null;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('404')) {
+        return null; // No snapshot exists yet
+      }
+      console.error('❌ Failed to get daily snapshot:', error);
+      throw error;
+    }
+  }
+
+  async getAllSnapshots(mode: JournalMode, year: number): Promise<JournalSnapshot[]> {
+    const endpoint = mode === 'plan' ? `/api/matrix/${this.userId}/${year}/plans` : `/api/matrix/${this.userId}/${year}/realities`;
+
+    try {
+      const response = await apiRequest('GET', endpoint);
+      const results = await response.json();
+
+      return results.map((snapshot: any) => ({
+        ...snapshot,
+        day_contents: convertFromMatrix(snapshot.day_contents || {}, year)
+      }));
+    } catch (error) {
+      console.error(`❌ Failed to get ${mode} snapshots:`, error);
+      throw error;
+    }
+  }
+
+  async getTimeline(year: number): Promise<any[]> {
+    try {
+      const response = await apiRequest('GET', `/api/timemachine/${this.userId}/${year}/timeline`);
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Failed to get timeline:', error);
+      throw error;
+    }
+  }
+
+  async exportData(year: number, format: 'json' | 'csv' = 'json'): Promise<any> {
+    try {
+      const endpoint = format === 'csv'
+        ? `/api/export/${this.userId}/${year}/matrix-csv`
+        : `/api/export/${this.userId}/${year}`;
+
+      const response = await apiRequest('GET', endpoint);
+
+      if (format === 'csv') {
+        return await response.text();
+      } else {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error(`❌ Failed to export ${format} data:`, error);
+      throw error;
+    }
+  }
+
+  async healthCheck(): Promise<boolean> {
+    try {
+      const response = await apiRequest('GET', '/api/health');
+      const result = await response.json();
+      return result.status === 'ok';
+    } catch (error) {
+      console.error('❌ API health check failed:', error);
+      return false;
+    }
+  }
+}
+
+export const journalAPI = JournalAPI.getInstance();
