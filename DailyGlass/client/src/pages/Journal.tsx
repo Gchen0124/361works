@@ -32,6 +32,7 @@ export default function Journal() {
   // Time Machine state
   const [isTimeMachine, setIsTimeMachine] = useState(false);
   const tm = useTimeMachine(currentYear);
+  const [compareMode, setCompareMode] = useState(false);
 
   // Dark mode based on current mode: plan = dark, reality = light
   const isDarkMode = currentMode === 'plan';
@@ -155,6 +156,17 @@ export default function Journal() {
                 <CheckCircle className="w-5 h-5 text-emerald-600" />
               )}
             </Button>
+            {!isTimeMachine && (
+              <Button
+                variant={compareMode ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setCompareMode(!compareMode)}
+                className="ml-2 hover-elevate"
+                title="Toggle Reality vs Plan overlay"
+              >
+                {compareMode ? 'Compare: ON' : 'Compare'}
+              </Button>
+            )}
             <Button
               variant={isTimeMachine ? 'default' : 'ghost'}
               size="sm"
@@ -204,9 +216,13 @@ export default function Journal() {
             year={currentYear}
             isDarkMode={isDarkMode}
             entries={effectiveEntries()}
-            onContentChange={isTimeMachine ? () => {} : updateEntry}
+            onContentChange={isTimeMachine || compareMode ? () => {} : updateEntry}
             currentMode={currentMode}
-            readOnly={isTimeMachine}
+            readOnly={isTimeMachine || compareMode}
+            compareMode={!isTimeMachine && compareMode}
+            planEntries={planEntries}
+            realityEntries={realityEntries}
+            showDateOutside={visibleBlocks < 100}
           />
         </div>
       </main>

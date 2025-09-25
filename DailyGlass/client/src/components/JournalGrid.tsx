@@ -13,6 +13,10 @@ interface JournalGridProps {
   onContentChange: (date: Date, content: string) => void;
   currentMode?: JournalMode;
   readOnly?: boolean;
+  compareMode?: boolean;
+  planEntries?: Record<string, string>;
+  realityEntries?: Record<string, string>;
+  showDateOutside?: boolean;
 }
 
 interface JournalEntry {
@@ -28,7 +32,11 @@ export default function JournalGrid({
   entries,
   onContentChange,
   currentMode = 'plan',
-  readOnly = false
+  readOnly = false,
+  compareMode = false,
+  planEntries = {},
+  realityEntries = {},
+  showDateOutside = false
 }: JournalGridProps) {
 
   // Generate the visible dates
@@ -107,6 +115,9 @@ export default function JournalGrid({
       >
         {visibleDates.map((date, index) => {
           const dayKey = dateToDay(date, year);
+          const planContent = planEntries[dayKey] ?? '';
+          const realityContent = realityEntries[dayKey] ?? '';
+          const singleContent = entries[dayKey] ?? '';
           return (
             <div
               key={dayKey}
@@ -116,17 +127,53 @@ export default function JournalGrid({
                 animationFillMode: 'backwards'
               }}
             >
-              <JournalBlock
-                date={date}
-                initialContent={entries[dayKey] || ''}
-                onContentChange={(content) => onContentChange(date, content)}
-                size={blockSize}
-                isVisible={true}
-                showDateOnHover={blockSize === 'micro' || (isDarkMode && visibleBlocks >= 100)}
-                totalBlocks={visibleBlocks}
-                currentMode={currentMode}
-                readOnly={readOnly}
-              />
+              {compareMode ? (
+                <div>
+                  {showDateOutside && (
+                    <time
+                      className="text-xs text-foreground/70 mb-1 block"
+                      dateTime={format(date, 'yyyy-MM-dd')}
+                    >
+                      {format(date, 'MMM d, yyyy')}
+                    </time>
+                  )}
+                  <div className={`relative group bg-white/10 backdrop-blur-md border border-white/20 ${visibleBlocks > 100 ? 'rounded-sm p-1' : 'rounded-xl p-2'} min-h-10`}>
+                    {visibleBlocks > 100 && (
+                      <div
+                        className="absolute top-1 left-1 z-10 px-1 py-0.5 rounded-sm text-[0.6rem] bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        {format(date, 'MMM d')}
+                      </div>
+                    )}
+                    {/* Reality (top) */}
+                    <div
+                      className={`${blockSize === 'micro' ? 'text-[0.6rem]' : 'text-xs'} text-foreground leading-tight truncate`}
+                      title={realityContent}
+                    >
+                      {realityContent}
+                    </div>
+                    {/* Plan (bottom) */}
+                    <div
+                      className={`${blockSize === 'micro' ? 'text-[0.55rem]' : 'text-xs'} text-muted-foreground leading-tight truncate ${visibleBlocks > 100 ? 'mt-0' : 'mt-1'}`}
+                      title={planContent}
+                    >
+                      {planContent}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <JournalBlock
+                  date={date}
+                  initialContent={singleContent}
+                  onContentChange={(content) => onContentChange(date, content)}
+                  size={blockSize}
+                  isVisible={true}
+                  showDateOnHover={blockSize === 'micro' || (isDarkMode && visibleBlocks >= 100)}
+                  totalBlocks={visibleBlocks}
+                  currentMode={currentMode}
+                  readOnly={readOnly}
+                />
+              )}
             </div>
           );
         })}
