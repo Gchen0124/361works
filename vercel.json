@@ -1,5 +1,4 @@
 {
-  "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist/client",
   "installCommand": "npm install",
@@ -13,14 +12,5 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "functions": {
-    "api/index.js": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 10
-    }
-  },
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }
