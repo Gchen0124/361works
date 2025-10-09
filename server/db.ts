@@ -1,25 +1,37 @@
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { drizzle } from "drizzle-orm/libsql";
+import { createClient } from "@libsql/client";
 import * as schema from "@shared/schema";
 
-const sqlite = new Database(process.env.LOCAL_SQLITE_PATH || "./data/dailyglass.db");
-sqlite.pragma("journal_mode = WAL");
+// Create client based on environment
+const client = process.env.NODE_ENV === 'production' && process.env.TURSO_DATABASE_URL
+  ? createClient({
+      url: process.env.TURSO_DATABASE_URL,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    })
+  : createClient({
+      url: `file:${process.env.LOCAL_SQLITE_PATH || "./data/dailyglass.db"}`,
+    });
 
-export const db = drizzle(sqlite, { schema });
+export const db = drizzle(client, { schema });
 
-// Run migrations on startup - skip if tables already exist
-try {
-  const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
-  const tableNames = tables.map((t: any) => t.name);
+// Initialize database (async for Turso compatibility)
+export async function initializeDatabase() {
+  try {
+    // Check if tables exist
+    const result = await client.execute(
+      "SELECT name FROM sqlite_master WHERE type='table'"
+    );
 
-  if (!tableNames.includes('journal_plan_matrix') || !tableNames.includes('journal_reality_matrix')) {
-    migrate(db, { migrationsFolder: "./drizzle" });
-    console.log("✅ Database migrations completed successfully");
-  } else {
-    console.log("✅ Database tables already exist, skipping migrations");
+    const tableNames = result.rows.map((row: any) => row.name);
+
+    if (!tableNames.includes('journal_plan_matrix') || !tableNames.includes('journal_reality_matrix')) {
+      console.log("⚠️  Database tables not found. Please run migrations manually.");
+      console.log("   For Turso: turso db shell dailyglass < drizzle/0000_*.sql");
+      console.log("   For local: npm run db:push");
+    } else {
+      console.log("✅ Database tables verified");
+    }
+  } catch (error) {
+    console.error("⚠️  Database initialization error:", error);
   }
-} catch (error) {
-  console.warn("⚠️  Database migration warning:", error);
-  console.log("📄 Continuing with existing database schema...");
 }
