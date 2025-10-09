@@ -4,3 +4,25 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.*.local
+client/.env
+client/.env.local
+
+# Database files
+data/*.db
+data/*.db-wal
+data/*.db-shm
+*.db-wal
+*.db-shm
+
+# Google OAuth credentials (NEVER commit these!)
+*client_secret*.json
+client_secret*.json
+
+# Temp/untitled folders
+data/untitled*/

@@ -8,15 +8,51 @@ import {
   timeMachineComparisonSchema
 } from "@shared/schema";
 import { z } from "zod";
+import cookieParser from 'cookie-parser';
+import { requireAuth, optionalAuth } from './auth/middleware';
+import { handleGoogleOneTap } from './auth/google-one-tap';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 export async function registerRoutes(app: Express): Promise<Server> {
+
+  // ==================== SETUP ====================
+
+  // Cookie parser (for JWT extraction)
+  app.use(cookieParser());
+
+  // ==================== AUTH ROUTES ====================
+
+  // Google One Tap Sign-In (Modern approach)
+  app.post('/api/auth/google', handleGoogleOneTap);
+
+  // Logout
+  app.post('/api/auth/logout', (req, res) => {
+    res.clearCookie('auth_token');
+    res.json({ message: 'Logged out successfully' });
+  });
+
+  // Get current user from JWT
+  app.get('/api/auth/me', optionalAuth, (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+    res.json(req.user);
+  });
 
   // ==================== MATRIX JOURNAL ROUTES ====================
 
   // POST /api/matrix/plan - Create planning snapshot
-  app.post("/api/matrix/plan", async (req, res) => {
+  app.post("/api/matrix/plan", requireAuth, async (req, res) => {
     try {
-      const validatedEntry = insertJournalPlanMatrixSchema.parse(req.body);
+      const userId = req.userId!; // From requireAuth middleware
+
+      const validatedEntry = insertJournalPlanMatrixSchema.parse({
+        ...req.body,
+        user_id: userId, // Override with authenticated userId
+      });
       const snapshot = await storage.createPlanSnapshot(validatedEntry);
       res.json(snapshot);
     } catch (error) {

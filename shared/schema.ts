@@ -6,9 +6,22 @@ import { z } from "zod";
 // Users table
 export const users = sqliteTable("users", {
   id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
+
+  // Local auth fields
   username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  password: text("password"), // Nullable for OAuth users
+
+  // Google OAuth fields
+  google_id: text("google_id").unique(),
+  email: text("email").unique(),
+  display_name: text("display_name"),
+  avatar_url: text("avatar_url"),
+
+  // Metadata
+  auth_provider: text("auth_provider").notNull().default('local'), // 'local' or 'google'
   created_at: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  updated_at: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  last_login: integer("last_login", { mode: "timestamp" }),
 });
 
 // Journal Plan Matrix - stores 365-day planning snapshots with timestamps

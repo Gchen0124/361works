@@ -21,12 +21,26 @@ import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, and, desc } from "drizzle-orm";
 
+// Google OAuth Profile interface
+export interface GoogleProfile {
+  id: string;
+  email: string;
+  displayName: string;
+  photos?: Array<{ value: string }>;
+}
+
 // Enhanced storage interface with matrix operations and Time Machine support
 export interface IStorage {
   // User operations
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+
+  // OAuth operations
+  getUserByGoogleId(googleId: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createGoogleUser(profile: GoogleProfile): Promise<User>;
+  updateUserLastLogin(userId: string): Promise<void>;
 
   // Matrix journal operations
   createPlanSnapshot(entry: InsertJournalPlanMatrix): Promise<JournalPlanMatrix>;
@@ -138,6 +152,71 @@ export class SqliteStorage implements IStorage {
     } catch (error) {
       console.error("Error creating user:", error);
       throw error;
+    }
+  }
+
+  // OAuth methods
+  async getUserByGoogleId(googleId: string): Promise<User | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(users)
+        .where(eq(users.google_id, googleId))
+        .limit(1);
+      return result[0];
+    } catch (error) {
+      console.error("Error getting user by Google ID:", error);
+      return undefined;
+    }
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      return result[0];
+    } catch (error) {
+      console.error("Error getting user by email:", error);
+      return undefined;
+    }
+  }
+
+  async createGoogleUser(profile: GoogleProfile): Promise<User> {
+    try {
+      const result = await db
+        .insert(users)
+        .values({
+          username: profile.email || `google_${profile.id}`,
+          password: null, // No password for OAuth users
+          google_id: profile.id,
+          email: profile.email,
+          display_name: profile.displayName,
+          avatar_url: profile.photos?.[0]?.value,
+          auth_provider: 'google',
+          last_login: new Date(),
+        })
+        .returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating Google user:", error);
+      throw error;
+    }
+  }
+
+  async updateUserLastLogin(userId: string): Promise<void> {
+    try {
+      await db
+        .update(users)
+        .set({
+          last_login: new Date(),
+          updated_at: new Date()
+        })
+        .where(eq(users.id, userId));
+    } catch (error) {
+      console.error("Error updating last login:", error);
     }
   }
 
