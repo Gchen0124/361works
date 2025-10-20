@@ -169,15 +169,6 @@ export default function Journal() {
               </Button>
             )}
             <Button
-              variant={weeklyLayout ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setWeeklyLayout(!weeklyLayout)}
-              className="ml-2 hover-elevate"
-              title="Toggle Weekly Layout"
-            >
-              {weeklyLayout ? 'Weekly: ON' : 'Weekly'}
-            </Button>
-            <Button
               variant={isTimeMachine ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setIsTimeMachine(!isTimeMachine)}
@@ -215,6 +206,8 @@ export default function Journal() {
         currentMode={currentMode}
         planEntries={planEntries}
         realityEntries={realityEntries}
+        weeklyLayout={weeklyLayout}
+        onWeeklyLayoutChange={setWeeklyLayout}
       />
 
       {/* Main Content - Full Width */}

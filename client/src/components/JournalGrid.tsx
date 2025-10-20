@@ -17,7 +17,7 @@ interface JournalGridProps {
   planEntries?: Record<string, string>;
   realityEntries?: Record<string, string>;
   showDateOutside?: boolean;
-  weeklyLayout?: boolean;  // New prop to enable weekly grid layout
+  weeklyLayout?: boolean;
 }
 
 interface JournalEntry {
@@ -56,31 +56,27 @@ export default function JournalGrid({
     let currentWeek: Date[] = [];
     let currentWeekNumber: number | null = null;
 
-    visibleDates.forEach((date) => {
+    visibleDates.forEach((date, index) => {
       const weekNum = getWeek(date, { weekStartsOn: 0 });
       const dayOfWeek = getDay(date);
 
-      // Start a new week if it's Sunday or if week number changed
-      if (dayOfWeek === 0 && currentWeek.length > 0) {
+      // If week number changes, push the previous week and start a new one
+      if (currentWeekNumber !== null && weekNum !== currentWeekNumber) {
         groups.push({
-          weekNumber: currentWeekNumber!,
+          weekNumber: currentWeekNumber,
           dates: currentWeek
         });
         currentWeek = [];
-        currentWeekNumber = weekNum;
       }
 
-      if (currentWeekNumber === null) {
-        currentWeekNumber = weekNum;
-      }
-
+      currentWeekNumber = weekNum;
       currentWeek.push(date);
     });
 
     // Push the last week
-    if (currentWeek.length > 0) {
+    if (currentWeek.length > 0 && currentWeekNumber !== null) {
       groups.push({
-        weekNumber: currentWeekNumber!,
+        weekNumber: currentWeekNumber,
         dates: currentWeek
       });
     }
@@ -219,22 +215,118 @@ export default function JournalGrid({
       {/* Journal Grid */}
       {weeklyLayout ? (
         // Weekly Layout: Each week is a row with week number on the left
-        <div className="space-y-4">
+        <div className="space-y-3">
           {weekGroups.map((week, weekIndex) => (
-            <div key={`week-${week.weekNumber}`} className="flex items-start gap-4">
+            <div key={`week-${week.weekNumber}`} className="flex items-stretch gap-3">
               {/* Week Number */}
-              <div className="flex-shrink-0 mt-2">
-                <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-2 text-sm font-semibold text-foreground/80">
-                  Week {week.weekNumber}
+              <div className="flex-shrink-0 flex items-center">
+                <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-2 py-3 min-w-[4rem] text-center">
+                  <div className="text-[0.65rem] text-foreground/60 uppercase tracking-wide">Week</div>
+                  <div className="text-lg font-bold text-foreground/90">{week.weekNumber}</div>
                 </div>
               </div>
 
-              {/* Week Days */}
+              {/* Week Days - 7 column grid with tighter spacing */}
               <div className={`
-                flex-1 grid grid-cols-7 gap-4
+                flex-1 grid grid-cols-7 gap-2
                 transition-all duration-500 ease-out
               `}>
-                {week.dates.map((date, dateIndex) => renderDateBlock(date, weekIndex * 7 + dateIndex))}
+                {week.dates.map((date, dateIndex) => {
+                  const dayOfWeek = getDay(date);
+                  const isSunday = dayOfWeek === 0;
+
+                  return (
+                    <div
+                      key={dateToDay(date, year)}
+                      className={`
+                        animate-fade-in group/item
+                        ${isSunday ? 'sunday-block' : ''}
+                      `}
+                      style={{
+                        animationDelay: `${(weekIndex * 7 + dateIndex) * 0.02}s`,
+                        animationFillMode: 'backwards'
+                      }}
+                    >
+                      {compareMode ? (
+                        <div>
+                          {showDateOutside && (
+                            <time
+                              className={`block mb-1 ${isSunday ? 'text-sm font-semibold' : 'text-xs'} text-foreground/70`}
+                              dateTime={format(date, 'yyyy-MM-dd')}
+                            >
+                              {format(date, 'MMM d, yyyy')}
+                            </time>
+                          )}
+                          <div className="space-y-2">
+                            {/* Current mode (editable) */}
+                            <div className={`relative group bg-white/10 backdrop-blur-md border-2 ${
+                              currentMode === 'plan' ? 'border-indigo-500/50' : 'border-emerald-500/50'
+                            } rounded-xl p-3`}>
+                              <div className="text-[0.65rem] font-semibold mb-1 opacity-70">
+                                {currentMode === 'plan' ? '📋 PLAN' : '✅ REALITY'}
+                              </div>
+                              <textarea
+                                value={currentMode === 'plan' ? planEntries[dateToDay(date, year)] ?? '' : realityEntries[dateToDay(date, year)] ?? ''}
+                                onChange={(e) => onContentChange(date, e.target.value)}
+                                placeholder={currentMode === 'plan' ? 'Plan...' : 'Reality...'}
+                                className="w-full bg-transparent border-none outline-none resize-none text-foreground placeholder:text-muted-foreground text-sm min-h-[5rem]"
+                                rows={4}
+                              />
+                            </div>
+                            {/* Other mode (reference) */}
+                            <div className={`relative bg-white/5 backdrop-blur-md border ${
+                              currentMode === 'plan' ? 'border-emerald-500/30' : 'border-indigo-500/30'
+                            } rounded-xl p-3 opacity-70`}>
+                              <div className="text-[0.65rem] font-semibold mb-1 opacity-70">
+                                {currentMode === 'plan' ? '✅ Ref' : '📋 Ref'}
+                              </div>
+                              <div className="text-foreground/70 text-sm whitespace-pre-wrap line-clamp-3">
+                                {(currentMode === 'plan' ? realityEntries[dateToDay(date, year)] : planEntries[dateToDay(date, year)]) || <span className="italic text-muted-foreground text-xs">Empty</span>}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className={`
+                          h-full bg-white/10 backdrop-blur-md border border-white/20
+                          rounded-xl shadow-sm hover:shadow-md transition-all duration-200 ease-out
+                          hover:scale-[1.02] hover:bg-white/15
+                          focus-within:ring-2 focus-within:ring-primary/50 focus-within:scale-[1.02]
+                          animate-fade-in group overflow-hidden relative
+                          flex flex-col
+                        `}>
+                          <div className="p-3 flex-1 flex flex-col">
+                            {/* Date Header */}
+                            <div className="flex justify-between items-center mb-2">
+                              <time
+                                className={`${isSunday ? 'text-base font-bold' : 'text-sm font-medium'} text-foreground/70`}
+                                dateTime={format(date, 'yyyy-MM-dd')}
+                              >
+                                {format(date, isSunday ? 'EEE, MMM d' : 'EEE d')}
+                              </time>
+                              <div className="w-2 h-2 rounded-full bg-primary/30 group-hover:bg-primary/50 transition-colors" />
+                            </div>
+
+                            {/* Content Textarea */}
+                            <textarea
+                              value={entries[dateToDay(date, year)] ?? ''}
+                              onChange={(e) => onContentChange(date, e.target.value)}
+                              readOnly={readOnly}
+                              disabled={readOnly}
+                              placeholder={currentMode === 'plan' ? 'Your plan...' : 'What happened?'}
+                              className={`
+                                flex-1 w-full bg-transparent border-none outline-none resize-none
+                                text-foreground placeholder:text-muted-foreground
+                                ${isSunday ? 'text-sm' : 'text-sm'} font-light leading-relaxed overflow-hidden
+                              `}
+                              rows={4}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

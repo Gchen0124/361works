@@ -18,6 +18,8 @@ interface CollapsibleSidebarProps {
   currentMode?: JournalMode;
   planEntries?: Record<string, string>;
   realityEntries?: Record<string, string>;
+  weeklyLayout?: boolean;
+  onWeeklyLayoutChange?: (enabled: boolean) => void;
 }
 
 export default function CollapsibleSidebar({
@@ -29,7 +31,9 @@ export default function CollapsibleSidebar({
   currentYear = new Date().getFullYear(),
   journalEntries = {},
   isCollapsed,
-  onToggleSidebar
+  onToggleSidebar,
+  weeklyLayout = false,
+  onWeeklyLayoutChange
 }: CollapsibleSidebarProps) {
 
   return (
@@ -80,6 +84,7 @@ export default function CollapsibleSidebar({
                 onClick={() => {
                   onVisibleBlocksChange(1);
                   onStartDateChange(new Date());
+                  onWeeklyLayoutChange?.(false);
                 }}
                 className="w-full justify-start hover-elevate"
                 data-testid="button-single-day"
@@ -92,11 +97,26 @@ export default function CollapsibleSidebar({
                 onClick={() => {
                   onVisibleBlocksChange(7);
                   onStartDateChange(new Date());
+                  onWeeklyLayoutChange?.(false);
                 }}
                 className="w-full justify-start hover-elevate"
                 data-testid="button-this-week"
               >
                 This Week (7 days)
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const sunday = startOfWeek(new Date(), { weekStartsOn: 0 });
+                  onVisibleBlocksChange(7);
+                  onStartDateChange(sunday);
+                  onWeeklyLayoutChange?.(true);
+                }}
+                className="w-full justify-start hover-elevate"
+                data-testid="button-weekly-view"
+              >
+                <span className={weeklyLayout ? 'font-bold' : ''}>Weekly View (Sun-Sat)</span>
               </Button>
               <Button
                 variant="ghost"
