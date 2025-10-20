@@ -33,6 +33,7 @@ export default function Journal() {
   const [isTimeMachine, setIsTimeMachine] = useState(false);
   const tm = useTimeMachine(currentYear);
   const [compareMode, setCompareMode] = useState(false);
+  const [weeklyLayout, setWeeklyLayout] = useState(false);
 
   // Dark mode based on current mode: plan = dark, reality = light
   const isDarkMode = currentMode === 'plan';
@@ -168,6 +169,15 @@ export default function Journal() {
               </Button>
             )}
             <Button
+              variant={weeklyLayout ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setWeeklyLayout(!weeklyLayout)}
+              className="ml-2 hover-elevate"
+              title="Toggle Weekly Layout"
+            >
+              {weeklyLayout ? 'Weekly: ON' : 'Weekly'}
+            </Button>
+            <Button
               variant={isTimeMachine ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setIsTimeMachine(!isTimeMachine)}
@@ -223,6 +233,7 @@ export default function Journal() {
             planEntries={planEntries}
             realityEntries={realityEntries}
             showDateOutside={visibleBlocks < 100}
+            weeklyLayout={weeklyLayout}
           />
         </div>
       </main>

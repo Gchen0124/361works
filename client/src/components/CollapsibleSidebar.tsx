@@ -102,19 +102,6 @@ export default function CollapsibleSidebar({
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  const sunday = startOfWeek(new Date(), { weekStartsOn: 0 });
-                  onVisibleBlocksChange(7);
-                  onStartDateChange(sunday);
-                }}
-                className="w-full justify-start hover-elevate"
-                data-testid="button-weekly-view"
-              >
-                Weekly View (Sun-Sat)
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
                   onVisibleBlocksChange(30);
                   onStartDateChange(new Date());
                 }}
