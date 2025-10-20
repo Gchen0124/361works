@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ZoomControls from './ZoomControls';
 import type { JournalMode } from '@/hooks/useJournalData';
-import { startOfYear } from 'date-fns';
+import { startOfYear, startOfWeek } from 'date-fns';
 
 interface CollapsibleSidebarProps {
   visibleBlocks: number;
@@ -97,6 +97,19 @@ export default function CollapsibleSidebar({
                 data-testid="button-this-week"
               >
                 This Week (7 days)
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const sunday = startOfWeek(new Date(), { weekStartsOn: 0 });
+                  onVisibleBlocksChange(7);
+                  onStartDateChange(sunday);
+                }}
+                className="w-full justify-start hover-elevate"
+                data-testid="button-weekly-view"
+              >
+                Weekly View (Sun-Sat)
               </Button>
               <Button
                 variant="ghost"

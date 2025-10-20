@@ -216,9 +216,9 @@ export default function Journal() {
             year={currentYear}
             isDarkMode={isDarkMode}
             entries={effectiveEntries()}
-            onContentChange={isTimeMachine || compareMode ? () => {} : updateEntry}
+            onContentChange={isTimeMachine ? () => {} : updateEntry}
             currentMode={currentMode}
-            readOnly={isTimeMachine || compareMode}
+            readOnly={isTimeMachine}
             compareMode={!isTimeMachine && compareMode}
             planEntries={planEntries}
             realityEntries={realityEntries}

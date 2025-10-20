@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { addDays, startOfYear, format } from 'date-fns';
+import { addDays, startOfYear, format, getWeek, getDay } from 'date-fns';
 import JournalBlock from './JournalBlock';
 import type { JournalMode } from '@/hooks/useJournalData';
 import { dateToDay } from '@/hooks/useJournalData';
@@ -75,6 +75,10 @@ export default function JournalGrid({
   const gridColumns = getGridColumns(visibleBlocks);
   const blockSize = getBlockSize(visibleBlocks);
 
+  // Check if this is a weekly view (7 days starting from Sunday)
+  const isWeeklyView = visibleBlocks === 7 && getDay(startDate) === 0;
+  const weekNumber = isWeeklyView ? getWeek(startDate, { weekStartsOn: 0 }) : null;
+
   return (
     <div className="space-y-4" data-testid="journal-grid">
       {/* Grid Info */}
@@ -97,22 +101,38 @@ export default function JournalGrid({
       </div>
 
       {/* Journal Grid */}
-      <div 
+      <div
         className={`
-          grid ${gridColumns} auto-rows-max
-          transition-all duration-500 ease-out w-full
-          ${visibleBlocks === 1 ? 'max-w-4xl mx-auto' : ''}
-          ${visibleBlocks <= 7 ? 'gap-4' : ''}
-          ${visibleBlocks > 7 && visibleBlocks <= 30 ? 'gap-2' : ''}
-          ${visibleBlocks > 30 && visibleBlocks <= 100 ? 'gap-1' : ''}
-          ${visibleBlocks > 100 ? 'gap-0.5' : ''}
-          ${visibleBlocks > 100 ? 'aspect-square' : ''}
+          ${isWeeklyView ? 'flex items-start gap-4' : ''}
         `}
-        style={{
-          animationDelay: '0.1s',
-          animationFillMode: 'backwards'
-        }}
       >
+        {/* Week Number (only for weekly view) */}
+        {isWeeklyView && weekNumber !== null && (
+          <div className="flex-shrink-0 mt-2">
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-2 text-sm font-semibold text-foreground/80">
+              Week {weekNumber}
+            </div>
+          </div>
+        )}
+
+        {/* Grid Container */}
+        <div
+          className={`
+            grid ${gridColumns} auto-rows-max
+            transition-all duration-500 ease-out
+            ${isWeeklyView ? 'flex-1' : 'w-full'}
+            ${visibleBlocks === 1 ? 'max-w-4xl mx-auto' : ''}
+            ${visibleBlocks <= 7 ? 'gap-4' : ''}
+            ${visibleBlocks > 7 && visibleBlocks <= 30 ? 'gap-2' : ''}
+            ${visibleBlocks > 30 && visibleBlocks <= 100 ? 'gap-1' : ''}
+            ${visibleBlocks > 100 ? 'gap-0.5' : ''}
+            ${visibleBlocks > 100 ? 'aspect-square' : ''}
+          `}
+          style={{
+            animationDelay: '0.1s',
+            animationFillMode: 'backwards'
+          }}
+        >
         {visibleDates.map((date, index) => {
           const dayKey = dateToDay(date, year);
           const planContent = planEntries[dayKey] ?? '';
@@ -137,27 +157,40 @@ export default function JournalGrid({
                       {format(date, 'MMM d, yyyy')}
                     </time>
                   )}
-                  <div className={`relative group bg-white/10 backdrop-blur-md border border-white/20 ${visibleBlocks > 100 ? 'rounded-sm p-1' : 'rounded-xl p-2'} min-h-10`}>
-                    {visibleBlocks > 100 && (
-                      <div
-                        className="absolute top-1 left-1 z-10 px-1 py-0.5 rounded-sm text-[0.6rem] bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        {format(date, 'MMM d')}
+                  <div className="space-y-2">
+                    {/* Current mode (editable) - appears first */}
+                    <div className={`relative group bg-white/10 backdrop-blur-md border-2 ${
+                      currentMode === 'plan' ? 'border-indigo-500/50' : 'border-emerald-500/50'
+                    } ${visibleBlocks > 100 ? 'rounded-sm p-1' : 'rounded-xl p-3'}`}>
+                      <div className="text-[0.65rem] font-semibold mb-1 opacity-70">
+                        {currentMode === 'plan' ? '📋 PLAN (editable)' : '✅ REALITY (editable)'}
                       </div>
-                    )}
-                    {/* Reality (top) */}
-                    <div
-                      className={`${blockSize === 'micro' ? 'text-[0.6rem]' : 'text-xs'} text-foreground leading-tight truncate`}
-                      title={realityContent}
-                    >
-                      {realityContent}
+                      <textarea
+                        value={currentMode === 'plan' ? planContent : realityContent}
+                        onChange={(e) => onContentChange(date, e.target.value)}
+                        placeholder={currentMode === 'plan' ? 'Your plan...' : 'What happened?'}
+                        className={`
+                          w-full bg-transparent border-none outline-none resize-none
+                          text-foreground placeholder:text-muted-foreground
+                          ${blockSize === 'micro' ? 'text-[0.6rem] min-h-[3rem]' : 'text-sm min-h-[5rem]'}
+                        `}
+                        rows={blockSize === 'micro' ? 3 : 4}
+                      />
                     </div>
-                    {/* Plan (bottom) */}
-                    <div
-                      className={`${blockSize === 'micro' ? 'text-[0.55rem]' : 'text-xs'} text-muted-foreground leading-tight truncate ${visibleBlocks > 100 ? 'mt-0' : 'mt-1'}`}
-                      title={planContent}
-                    >
-                      {planContent}
+
+                    {/* Other mode (read-only reference) - appears below */}
+                    <div className={`relative bg-white/5 backdrop-blur-md border ${
+                      currentMode === 'plan' ? 'border-emerald-500/30' : 'border-indigo-500/30'
+                    } ${visibleBlocks > 100 ? 'rounded-sm p-1' : 'rounded-xl p-3'} opacity-70`}>
+                      <div className="text-[0.65rem] font-semibold mb-1 opacity-70">
+                        {currentMode === 'plan' ? '✅ Reality (reference)' : '📋 Plan (reference)'}
+                      </div>
+                      <div
+                        className={`text-foreground/70 ${blockSize === 'micro' ? 'text-[0.55rem]' : 'text-sm'} whitespace-pre-wrap`}
+                        title={currentMode === 'plan' ? realityContent : planContent}
+                      >
+                        {(currentMode === 'plan' ? realityContent : planContent) || <span className="italic text-muted-foreground">No {currentMode === 'plan' ? 'reality' : 'plan'} entry yet</span>}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -177,6 +210,7 @@ export default function JournalGrid({
             </div>
           );
         })}
+        </div>
       </div>
 
       {/* Empty State */}
