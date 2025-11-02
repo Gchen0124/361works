@@ -25,6 +25,118 @@ interface JournalEntry {
   content: string;
 }
 
+type BlockSizeVariant = 'micro' | 'small' | 'medium' | 'large' | 'xl';
+
+interface CompareSizeStyle {
+  container: string;
+  header: string;
+  body: string;
+  minHeight: string;
+  rows: number;
+}
+
+interface ComparePalette {
+  container: string;
+  header: string;
+  dot: string;
+  textArea: string;
+  reference: string;
+  empty: string;
+  referenceTone: string;
+}
+
+const compareSizeStyles: Record<BlockSizeVariant, CompareSizeStyle> = {
+  micro: {
+    container: 'w-full rounded-md p-2 gap-2',
+    header: 'text-[0.65rem]',
+    body: 'text-[0.8rem] leading-snug',
+    minHeight: 'min-h-[3.25rem]',
+    rows: 3
+  },
+  small: {
+    container: 'w-full rounded-lg p-3 gap-2',
+    header: 'text-[0.75rem]',
+    body: 'text-sm leading-relaxed',
+    minHeight: 'min-h-[4.25rem]',
+    rows: 4
+  },
+  medium: {
+    container: 'w-full rounded-xl p-4 gap-3',
+    header: 'text-sm',
+    body: 'text-base leading-relaxed',
+    minHeight: 'min-h-[5.5rem]',
+    rows: 5
+  },
+  large: {
+    container: 'w-full rounded-2xl p-5 gap-3',
+    header: 'text-base',
+    body: 'text-lg leading-relaxed',
+    minHeight: 'min-h-[6rem]',
+    rows: 6
+  },
+  xl: {
+    container: 'w-full rounded-2xl p-6 gap-4',
+    header: 'text-lg',
+    body: 'text-xl leading-relaxed',
+    minHeight: 'min-h-[7rem]',
+    rows: 7
+  }
+};
+
+const compareStackGap: Record<BlockSizeVariant, string> = {
+  micro: 'gap-2',
+  small: 'gap-2.5',
+  medium: 'gap-3',
+  large: 'gap-3.5',
+  xl: 'gap-4'
+};
+
+const comparePalettes: Record<JournalMode, ComparePalette> = {
+  plan: {
+    container:
+      'backdrop-blur-xl border border-indigo-400/40 bg-gradient-to-br from-indigo-950/90 via-indigo-900/80 to-slate-950/90 text-white shadow-[0_20px_45px_rgba(67,56,202,0.35)]',
+    header: 'text-indigo-100/80',
+    dot: 'bg-indigo-300 shadow-[0_0_10px_rgba(129,140,248,0.65)]',
+    textArea:
+      'text-white placeholder:text-indigo-200 caret-indigo-200 focus-visible:ring-2 focus-visible:ring-indigo-400/60 focus-visible:ring-offset-0',
+    reference: 'text-indigo-100/90',
+    empty: 'text-indigo-200/70',
+    referenceTone: 'opacity-90'
+  },
+  reality: {
+    container:
+      'backdrop-blur-lg border border-emerald-400/35 bg-gradient-to-br from-white/95 via-emerald-50/85 to-emerald-100/70 dark:from-slate-100 dark:via-slate-50 dark:to-emerald-100/80 text-slate-900 shadow-[0_18px_40px_rgba(16,185,129,0.18)]',
+    header: 'text-emerald-800/80 dark:text-emerald-600/80',
+    dot: 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.45)]',
+    textArea:
+      'text-slate-900 placeholder:text-slate-500 caret-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-400/50 focus-visible:ring-offset-0',
+    reference: 'text-slate-700 dark:text-slate-800',
+    empty: 'text-slate-400 dark:text-slate-500',
+    referenceTone: 'opacity-95'
+  }
+};
+
+const getPanelDateFormat = (sizeKey: BlockSizeVariant, isWeeklyLayout: boolean) => {
+  if (isWeeklyLayout) {
+    return sizeKey === 'micro' ? 'EEE d' : 'EEE, MMM d';
+  }
+
+  switch (sizeKey) {
+    case 'micro':
+      return 'MM/dd';
+    case 'small':
+      return 'MMM d';
+    case 'medium':
+      return 'EEE, MMM d';
+    case 'large':
+      return 'EEE, MMM d';
+    case 'xl':
+      return 'EEEE, MMM d';
+    default:
+      return 'MMM d';
+  }
+};
+
 export default function JournalGrid({
   visibleBlocks,
   startDate,
@@ -111,6 +223,87 @@ export default function JournalGrid({
   const gridColumns = getGridColumns(visibleBlocks);
   const blockSize = getBlockSize(visibleBlocks);
 
+  const renderComparePanel = (
+    panelMode: JournalMode,
+    content: string,
+    isEditable: boolean,
+    date: Date,
+    sizeKey: BlockSizeVariant,
+    isWeeklyLayout: boolean
+  ) => {
+    const palette = comparePalettes[panelMode];
+    const sizeStyles = compareSizeStyles[sizeKey];
+    const formattedDate = format(date, getPanelDateFormat(sizeKey, isWeeklyLayout));
+    const focusWithinClass =
+      panelMode === 'plan'
+        ? 'focus-within:ring-2 focus-within:ring-indigo-400/70'
+        : 'focus-within:ring-2 focus-within:ring-emerald-400/60';
+
+    const containerClasses = `relative flex flex-col transition-all duration-300 ease-out overflow-hidden ${sizeStyles.container} ${palette.container} ${focusWithinClass} ${
+      isEditable ? '' : palette.referenceTone
+    }`;
+
+    const headerClasses = `flex items-center justify-between ${sizeStyles.header} font-semibold tracking-wide`;
+    const dotClasses = `h-2.5 w-2.5 rounded-full ${palette.dot}`;
+    const bodyBaseClasses = `${sizeStyles.body} ${sizeStyles.minHeight}`;
+
+    return (
+      <div className={containerClasses}>
+        <div className={headerClasses}>
+          <time
+            className={`${palette.header}`}
+            dateTime={format(date, 'yyyy-MM-dd')}
+          >
+            {formattedDate}
+          </time>
+          <span className={dotClasses} aria-hidden="true" />
+        </div>
+        {isEditable ? (
+          <textarea
+            aria-label={panelMode === 'plan' ? 'Plan entry' : 'Reality entry'}
+            value={content}
+            onChange={(e) => onContentChange(date, e.target.value)}
+            placeholder={panelMode === 'plan' ? 'Your plan...' : 'What happened?'}
+            className={`w-full bg-transparent border-none outline-none resize-none transition-colors duration-300 ${palette.textArea} ${bodyBaseClasses}`}
+            rows={sizeStyles.rows}
+          />
+        ) : (
+          <div
+            aria-label={panelMode === 'plan' ? 'Plan reference' : 'Reality reference'}
+            className={`whitespace-pre-wrap break-words ${palette.reference} ${bodyBaseClasses}`}
+          >
+            {content
+              ? content
+              : <span className={palette.empty}>No entry yet</span>}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderCompareContent = (
+    date: Date,
+    sizeKey: BlockSizeVariant,
+    isWeeklyLayout: boolean
+  ) => {
+    const dayKey = dateToDay(date, year);
+    const planContent = planEntries[dayKey] ?? '';
+    const realityContent = realityEntries[dayKey] ?? '';
+
+    const editableMode = currentMode;
+    const referenceMode: JournalMode = currentMode === 'plan' ? 'reality' : 'plan';
+
+    const editableContent = editableMode === 'plan' ? planContent : realityContent;
+    const referenceContent = referenceMode === 'plan' ? planContent : realityContent;
+
+    return (
+      <div className={`flex flex-col ${compareStackGap[sizeKey]}`}>
+        {renderComparePanel(editableMode, editableContent, true, date, sizeKey, isWeeklyLayout)}
+        {renderComparePanel(referenceMode, referenceContent, false, date, sizeKey, isWeeklyLayout)}
+      </div>
+    );
+  };
+
   // Render helper for a single date block
   const renderDateBlock = (date: Date, index: number) => {
     const dayKey = dateToDay(date, year);
@@ -128,52 +321,7 @@ export default function JournalGrid({
         }}
       >
         {compareMode ? (
-          <div>
-            {showDateOutside && (
-              <time
-                className="text-xs text-foreground/70 mb-1 block"
-                dateTime={format(date, 'yyyy-MM-dd')}
-              >
-                {format(date, 'MMM d, yyyy')}
-              </time>
-            )}
-            <div className="space-y-2">
-              {/* Current mode (editable) - appears first */}
-              <div className={`relative group bg-white/10 backdrop-blur-md border-2 ${
-                currentMode === 'plan' ? 'border-indigo-500/50' : 'border-emerald-500/50'
-              } ${visibleBlocks > 100 ? 'rounded-sm p-1' : 'rounded-xl p-3'}`}>
-                <div className="text-[0.65rem] font-semibold mb-1 opacity-70">
-                  {currentMode === 'plan' ? '📋 PLAN (editable)' : '✅ REALITY (editable)'}
-                </div>
-                <textarea
-                  value={currentMode === 'plan' ? planContent : realityContent}
-                  onChange={(e) => onContentChange(date, e.target.value)}
-                  placeholder={currentMode === 'plan' ? 'Your plan...' : 'What happened?'}
-                  className={`
-                    w-full bg-transparent border-none outline-none resize-none
-                    text-foreground placeholder:text-muted-foreground
-                    ${blockSize === 'micro' ? 'text-[0.6rem] min-h-[3rem]' : 'text-sm min-h-[5rem]'}
-                  `}
-                  rows={blockSize === 'micro' ? 3 : 4}
-                />
-              </div>
-
-              {/* Other mode (read-only reference) - appears below */}
-              <div className={`relative bg-white/5 backdrop-blur-md border ${
-                currentMode === 'plan' ? 'border-emerald-500/30' : 'border-indigo-500/30'
-              } ${visibleBlocks > 100 ? 'rounded-sm p-1' : 'rounded-xl p-3'} opacity-70`}>
-                <div className="text-[0.65rem] font-semibold mb-1 opacity-70">
-                  {currentMode === 'plan' ? '✅ Reality (reference)' : '📋 Plan (reference)'}
-                </div>
-                <div
-                  className={`text-foreground/70 ${blockSize === 'micro' ? 'text-[0.55rem]' : 'text-sm'} whitespace-pre-wrap`}
-                  title={currentMode === 'plan' ? realityContent : planContent}
-                >
-                  {(currentMode === 'plan' ? realityContent : planContent) || <span className="italic text-muted-foreground">No {currentMode === 'plan' ? 'reality' : 'plan'} entry yet</span>}
-                </div>
-              </div>
-            </div>
-          </div>
+          renderCompareContent(date, blockSize, false)
         ) : (
           <JournalBlock
             date={date}
@@ -248,44 +396,7 @@ export default function JournalGrid({
                       }}
                     >
                       {compareMode ? (
-                        <div>
-                          {showDateOutside && (
-                            <time
-                              className={`block mb-1 ${isSunday ? 'text-sm font-semibold' : 'text-xs'} text-foreground/70`}
-                              dateTime={format(date, 'yyyy-MM-dd')}
-                            >
-                              {format(date, 'MMM d, yyyy')}
-                            </time>
-                          )}
-                          <div className="space-y-2">
-                            {/* Current mode (editable) */}
-                            <div className={`relative group bg-white/10 backdrop-blur-md border-2 ${
-                              currentMode === 'plan' ? 'border-indigo-500/50' : 'border-emerald-500/50'
-                            } rounded-xl p-3`}>
-                              <div className="text-[0.65rem] font-semibold mb-1 opacity-70">
-                                {currentMode === 'plan' ? '📋 PLAN' : '✅ REALITY'}
-                              </div>
-                              <textarea
-                                value={currentMode === 'plan' ? planEntries[dateToDay(date, year)] ?? '' : realityEntries[dateToDay(date, year)] ?? ''}
-                                onChange={(e) => onContentChange(date, e.target.value)}
-                                placeholder={currentMode === 'plan' ? 'Plan...' : 'Reality...'}
-                                className="w-full bg-transparent border-none outline-none resize-none text-foreground placeholder:text-muted-foreground text-sm min-h-[5rem]"
-                                rows={4}
-                              />
-                            </div>
-                            {/* Other mode (reference) */}
-                            <div className={`relative bg-white/5 backdrop-blur-md border ${
-                              currentMode === 'plan' ? 'border-emerald-500/30' : 'border-indigo-500/30'
-                            } rounded-xl p-3 opacity-70`}>
-                              <div className="text-[0.65rem] font-semibold mb-1 opacity-70">
-                                {currentMode === 'plan' ? '✅ Ref' : '📋 Ref'}
-                              </div>
-                              <div className="text-foreground/70 text-sm whitespace-pre-wrap line-clamp-3">
-                                {(currentMode === 'plan' ? realityEntries[dateToDay(date, year)] : planEntries[dateToDay(date, year)]) || <span className="italic text-muted-foreground text-xs">Empty</span>}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                        renderCompareContent(date, blockSize, true)
                       ) : (
                         <div className={`
                           h-full bg-white/10 backdrop-blur-md border border-white/20
