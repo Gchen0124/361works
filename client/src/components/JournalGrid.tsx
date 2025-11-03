@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
-import { addDays, startOfYear, format, getWeek, getDay } from 'date-fns';
+import { useMemo } from 'react';
+import { addDays, format, getWeek, getDay, startOfWeek, endOfWeek } from 'date-fns';
 import JournalBlock from './JournalBlock';
 import type { JournalMode } from '@/hooks/useJournalData';
-import { dateToDay } from '@/hooks/useJournalData';
+import { dateToDay, dateToWeekKey } from '@/hooks/useJournalData';
 
 interface JournalGridProps {
   visibleBlocks: number;
@@ -16,8 +16,8 @@ interface JournalGridProps {
   compareMode?: boolean;
   planEntries?: Record<string, string>;
   realityEntries?: Record<string, string>;
-  showDateOutside?: boolean;
   weeklyLayout?: boolean;
+  onWeeklyContentChange?: (weekKey: string, content: string) => void;
 }
 
 interface JournalEntry {
@@ -38,7 +38,6 @@ interface CompareSizeStyle {
 interface ComparePalette {
   container: string;
   header: string;
-  dot: string;
   textArea: string;
   reference: string;
   empty: string;
@@ -96,7 +95,6 @@ const comparePalettes: Record<JournalMode, ComparePalette> = {
     container:
       'backdrop-blur-xl border border-indigo-400/40 bg-gradient-to-br from-indigo-950/90 via-indigo-900/80 to-slate-950/90 text-white shadow-[0_20px_45px_rgba(67,56,202,0.35)]',
     header: 'text-indigo-100/80',
-    dot: 'bg-indigo-300 shadow-[0_0_10px_rgba(129,140,248,0.65)]',
     textArea:
       'text-white placeholder:text-indigo-200 caret-indigo-200 focus-visible:ring-2 focus-visible:ring-indigo-400/60 focus-visible:ring-offset-0',
     reference: 'text-indigo-100/90',
@@ -107,7 +105,6 @@ const comparePalettes: Record<JournalMode, ComparePalette> = {
     container:
       'backdrop-blur-lg border border-emerald-400/35 bg-gradient-to-br from-white/95 via-emerald-50/85 to-emerald-100/70 dark:from-slate-100 dark:via-slate-50 dark:to-emerald-100/80 text-slate-900 shadow-[0_18px_40px_rgba(16,185,129,0.18)]',
     header: 'text-emerald-800/80 dark:text-emerald-600/80',
-    dot: 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.45)]',
     textArea:
       'text-slate-900 placeholder:text-slate-500 caret-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-400/50 focus-visible:ring-offset-0',
     reference: 'text-slate-700 dark:text-slate-800',
@@ -149,8 +146,8 @@ export default function JournalGrid({
   compareMode = false,
   planEntries = {},
   realityEntries = {},
-  showDateOutside = false,
-  weeklyLayout = false
+  weeklyLayout = false,
+  onWeeklyContentChange
 }: JournalGridProps) {
 
   // Generate the visible dates
@@ -223,60 +220,122 @@ export default function JournalGrid({
   const gridColumns = getGridColumns(visibleBlocks);
   const blockSize = getBlockSize(visibleBlocks);
 
-  const renderComparePanel = (
-    panelMode: JournalMode,
-    content: string,
-    isEditable: boolean,
-    date: Date,
-    sizeKey: BlockSizeVariant,
-    isWeeklyLayout: boolean
-  ) => {
-    const palette = comparePalettes[panelMode];
+  const renderModePanel = ({
+    mode,
+    content,
+    isEditable,
+    sizeKey,
+    placeholder,
+    ariaLabel,
+    onChange
+  }: {
+    mode: JournalMode;
+    content: string;
+    isEditable: boolean;
+    sizeKey: BlockSizeVariant;
+    placeholder: string;
+    ariaLabel: string;
+    onChange?: (value: string) => void;
+  }) => {
+    const palette = comparePalettes[mode];
     const sizeStyles = compareSizeStyles[sizeKey];
-    const formattedDate = format(date, getPanelDateFormat(sizeKey, isWeeklyLayout));
     const focusWithinClass =
-      panelMode === 'plan'
+      mode === 'plan'
         ? 'focus-within:ring-2 focus-within:ring-indigo-400/70'
         : 'focus-within:ring-2 focus-within:ring-emerald-400/60';
 
-    const containerClasses = `relative flex flex-col transition-all duration-300 ease-out overflow-hidden ${sizeStyles.container} ${palette.container} ${focusWithinClass} ${
-      isEditable ? '' : palette.referenceTone
-    }`;
+    const canEdit = isEditable && typeof onChange === 'function';
 
-    const headerClasses = `flex items-center justify-between ${sizeStyles.header} font-semibold tracking-wide`;
-    const dotClasses = `h-2.5 w-2.5 rounded-full ${palette.dot}`;
+    const containerClasses = [
+      'relative flex flex-col transition-all duration-300 ease-out overflow-hidden',
+      sizeStyles.container,
+      palette.container,
+      canEdit ? focusWithinClass : palette.referenceTone
+    ].join(' ');
+
     const bodyBaseClasses = `${sizeStyles.body} ${sizeStyles.minHeight}`;
+
+    if (canEdit) {
+      return (
+        <div className={containerClasses}>
+          <textarea
+            aria-label={ariaLabel}
+            value={content}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={placeholder}
+            className={`w-full bg-transparent border-none outline-none resize-none transition-colors duration-300 ${palette.textArea} ${bodyBaseClasses}`}
+            rows={sizeStyles.rows}
+            spellCheck={true}
+          />
+        </div>
+      );
+    }
 
     return (
       <div className={containerClasses}>
-        <div className={headerClasses}>
-          <time
-            className={`${palette.header}`}
-            dateTime={format(date, 'yyyy-MM-dd')}
-          >
-            {formattedDate}
-          </time>
-          <span className={dotClasses} aria-hidden="true" />
+        <div
+          aria-label={ariaLabel}
+          className={`whitespace-pre-wrap break-words ${palette.reference} ${bodyBaseClasses}`}
+        >
+          {content ? content : <span className={palette.empty}>No entry yet</span>}
         </div>
-        {isEditable ? (
-          <textarea
-            aria-label={panelMode === 'plan' ? 'Plan entry' : 'Reality entry'}
-            value={content}
-            onChange={(e) => onContentChange(date, e.target.value)}
-            placeholder={panelMode === 'plan' ? 'Your plan...' : 'What happened?'}
-            className={`w-full bg-transparent border-none outline-none resize-none transition-colors duration-300 ${palette.textArea} ${bodyBaseClasses}`}
-            rows={sizeStyles.rows}
-          />
-        ) : (
-          <div
-            aria-label={panelMode === 'plan' ? 'Plan reference' : 'Reality reference'}
-            className={`whitespace-pre-wrap break-words ${palette.reference} ${bodyBaseClasses}`}
-          >
-            {content
-              ? content
-              : <span className={palette.empty}>No entry yet</span>}
-          </div>
-        )}
+      </div>
+    );
+  };
+
+  interface ModeStackOptions {
+    label: string;
+    dateTime?: string;
+    sizeKey: BlockSizeVariant;
+    editableMode: JournalMode;
+    editableContent: string;
+    editablePlaceholder: string;
+    onEditableChange?: (value: string) => void;
+    referenceMode: JournalMode;
+    referenceContent: string;
+    referencePlaceholder: string;
+    isEditable: boolean;
+  }
+
+  const renderModeStack = ({
+    label,
+    dateTime,
+    sizeKey,
+    editableMode,
+    editableContent,
+    editablePlaceholder,
+    onEditableChange,
+    referenceMode,
+    referenceContent,
+    referencePlaceholder,
+    isEditable
+  }: ModeStackOptions) => {
+    const headerClasses = `${compareSizeStyles[sizeKey].header} font-semibold tracking-wide text-foreground/90`;
+
+    return (
+      <div className={`flex flex-col ${compareStackGap[sizeKey]}`}>
+        <time className={headerClasses} dateTime={dateTime}>
+          {label}
+        </time>
+        <div className={`flex flex-col ${compareStackGap[sizeKey]}`}>
+          {renderModePanel({
+            mode: editableMode,
+            content: editableContent,
+            isEditable,
+            sizeKey,
+            placeholder: editablePlaceholder,
+            ariaLabel: editableMode === 'plan' ? 'Plan entry' : 'Reality entry',
+            onChange: isEditable ? onEditableChange : undefined
+          })}
+          {renderModePanel({
+            mode: referenceMode,
+            content: referenceContent,
+            isEditable: false,
+            sizeKey,
+            placeholder: referencePlaceholder,
+            ariaLabel: referenceMode === 'plan' ? 'Plan reference' : 'Reality reference'
+          })}
+        </div>
       </div>
     );
   };
@@ -296,19 +355,93 @@ export default function JournalGrid({
     const editableContent = editableMode === 'plan' ? planContent : realityContent;
     const referenceContent = referenceMode === 'plan' ? planContent : realityContent;
 
-    return (
-      <div className={`flex flex-col ${compareStackGap[sizeKey]}`}>
-        {renderComparePanel(editableMode, editableContent, true, date, sizeKey, isWeeklyLayout)}
-        {renderComparePanel(referenceMode, referenceContent, false, date, sizeKey, isWeeklyLayout)}
-      </div>
-    );
+    const label = format(date, getPanelDateFormat(sizeKey, isWeeklyLayout));
+    const dateTime = format(date, 'yyyy-MM-dd');
+    const isEditable = !readOnly;
+
+    return renderModeStack({
+      label,
+      dateTime,
+      sizeKey,
+      editableMode,
+      editableContent,
+      editablePlaceholder: editableMode === 'plan' ? 'Your plan...' : 'What happened?',
+      onEditableChange: isEditable ? (value: string) => onContentChange(date, value) : undefined,
+      referenceMode,
+      referenceContent,
+      referencePlaceholder: referenceMode === 'plan' ? 'Your plan...' : 'What happened?',
+      isEditable
+    });
+  };
+
+  type WeekSummaryInfo = {
+    weekKey: string;
+    weekNumber: number;
+    start: Date;
+    end: Date;
+    label: string;
+    dateTime: string;
+  };
+
+  const buildWeekSummary = (date: Date): WeekSummaryInfo => {
+    const weekStart = startOfWeek(date, { weekStartsOn: 0 });
+    const weekEnd = endOfWeek(date, { weekStartsOn: 0 });
+    const weekNumber = getWeek(date, { weekStartsOn: 0, firstWeekContainsDate: 1 });
+    const label = `Week ${weekNumber} • ${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}`;
+
+    return {
+      weekKey: dateToWeekKey(weekStart, year),
+      weekNumber,
+      start: weekStart,
+      end: weekEnd,
+      label,
+      dateTime: format(weekStart, 'yyyy-MM-dd')
+    };
+  };
+
+  const weeklySummaryCache = useMemo(() => {
+    const map = new Map<string, WeekSummaryInfo>();
+    visibleDates.forEach((date) => {
+      const info = buildWeekSummary(date);
+      if (!map.has(info.weekKey)) {
+        map.set(info.weekKey, info);
+      }
+    });
+    return map;
+  }, [visibleDates, year]);
+
+  const renderWeeklyStack = (weekInfo: WeekSummaryInfo, sizeKey: BlockSizeVariant) => {
+    const summarySize: BlockSizeVariant = sizeKey === 'micro' ? 'small' : sizeKey;
+    const planContent = planEntries[weekInfo.weekKey] ?? '';
+    const realityContent = realityEntries[weekInfo.weekKey] ?? '';
+
+    const editableMode = currentMode;
+    const referenceMode: JournalMode = currentMode === 'plan' ? 'reality' : 'plan';
+    const editableContent = editableMode === 'plan' ? planContent : realityContent;
+    const referenceContent = referenceMode === 'plan' ? planContent : realityContent;
+
+    const canEditWeekly = !readOnly && typeof onWeeklyContentChange === 'function';
+
+    return renderModeStack({
+      label: weekInfo.label,
+      dateTime: weekInfo.dateTime,
+      sizeKey: summarySize,
+      editableMode,
+      editableContent,
+      editablePlaceholder: editableMode === 'plan' ? 'Weekly objectives...' : 'Weekly highlights...',
+      onEditableChange: canEditWeekly && onWeeklyContentChange
+        ? (value: string) => onWeeklyContentChange(weekInfo.weekKey, value)
+        : undefined,
+      referenceMode,
+      referenceContent,
+      referencePlaceholder: referenceMode === 'plan' ? 'Weekly objectives...' : 'Weekly highlights...',
+      isEditable: canEditWeekly
+    });
   };
 
   // Render helper for a single date block
   const renderDateBlock = (date: Date, index: number) => {
     const dayKey = dateToDay(date, year);
-    const planContent = planEntries[dayKey] ?? '';
-    const realityContent = realityEntries[dayKey] ?? '';
     const singleContent = entries[dayKey] ?? '';
 
     return (
@@ -339,6 +472,27 @@ export default function JournalGrid({
     );
   };
 
+  const shouldShowWeeklySummary = !weeklyLayout && visibleBlocks <= 7;
+  const standardGridNodes: JSX.Element[] = [];
+  const renderedWeekKeys = new Set<string>();
+
+  visibleDates.forEach((date, index) => {
+    if (shouldShowWeeklySummary) {
+      const weekKey = dateToWeekKey(date, year);
+      const summaryInfo = weeklySummaryCache.get(weekKey) ?? buildWeekSummary(date);
+      if (!renderedWeekKeys.has(summaryInfo.weekKey)) {
+        renderedWeekKeys.add(summaryInfo.weekKey);
+        standardGridNodes.push(
+          <div key={`${summaryInfo.weekKey}-summary`} className="col-span-full mb-4">
+            {renderWeeklyStack(summaryInfo, blockSize)}
+          </div>
+        );
+      }
+    }
+
+    standardGridNodes.push(renderDateBlock(date, index));
+  });
+
   return (
     <div className="space-y-4" data-testid="journal-grid">
       {/* Grid Info */}
@@ -364,83 +518,97 @@ export default function JournalGrid({
       {weeklyLayout ? (
         // Weekly Layout: Each week is a row with week number on the left
         <div className="space-y-3">
-          {weekGroups.map((week, weekIndex) => (
-            <div key={`week-${week.weekNumber}`} className="flex items-stretch gap-3">
-              {/* Week Number */}
-              <div className="flex-shrink-0 flex items-center">
-                <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-2 py-3 min-w-[4rem] text-center">
-                  <div className="text-[0.65rem] text-foreground/60 uppercase tracking-wide">Week</div>
-                  <div className="text-lg font-bold text-foreground/90">{week.weekNumber}</div>
+          {weekGroups.map((week, weekIndex) => {
+            const firstDate = week.dates[0];
+            const weekInfo = weeklySummaryCache.get(dateToWeekKey(firstDate, year)) ?? buildWeekSummary(firstDate);
+
+            return (
+              <div
+                key={`${weekInfo.weekKey}-${weekIndex}`}
+                className="flex flex-col gap-4 lg:flex-row lg:items-start"
+              >
+                <div className="flex flex-row gap-3 lg:flex-col lg:w-64">
+                  {/* Week Number */}
+                  <div className="flex-shrink-0 flex items-center">
+                    <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-4 min-w-[4.5rem] text-center">
+                      <div className="text-[0.65rem] text-foreground/60 uppercase tracking-wide">Week</div>
+                      <div className="text-lg font-bold text-foreground/90">{weekInfo.weekNumber}</div>
+                    </div>
+                  </div>
+
+                  {/* Weekly Summary */}
+                  <div className="flex-1 min-w-[14rem]">
+                    {renderWeeklyStack(weekInfo, blockSize)}
+                  </div>
+                </div>
+
+                {/* Week Days */}
+                <div className={`
+                  flex-1 grid grid-cols-7 gap-2
+                  transition-all duration-500 ease-out
+                `}>
+                  {week.dates.map((date, dateIndex) => {
+                    const dayOfWeek = getDay(date);
+                    const isSunday = dayOfWeek === 0;
+
+                    return (
+                      <div
+                        key={dateToDay(date, year)}
+                        className={`
+                          animate-fade-in group/item
+                          ${isSunday ? 'sunday-block' : ''}
+                        `}
+                        style={{
+                          animationDelay: `${(weekIndex * 7 + dateIndex) * 0.02}s`,
+                          animationFillMode: 'backwards'
+                        }}
+                      >
+                        {compareMode ? (
+                          renderCompareContent(date, blockSize, true)
+                        ) : (
+                          <div className={`
+                            h-full bg-white/10 backdrop-blur-md border border-white/20
+                            rounded-xl shadow-sm hover:shadow-md transition-all duration-200 ease-out
+                            hover:scale-[1.02] hover:bg-white/15
+                            focus-within:ring-2 focus-within:ring-primary/50 focus-within:scale-[1.02]
+                            animate-fade-in group overflow-hidden relative
+                            flex flex-col
+                          `}>
+                            <div className="p-3 flex-1 flex flex-col">
+                              {/* Date Header */}
+                              <div className="flex items-center mb-2">
+                                <time
+                                  className={`${isSunday ? 'text-base font-bold' : 'text-sm font-medium'} text-foreground/70`}
+                                  dateTime={format(date, 'yyyy-MM-dd')}
+                                >
+                                  {format(date, isSunday ? 'EEE, MMM d' : 'EEE d')}
+                                </time>
+                              </div>
+
+                              {/* Content Textarea */}
+                              <textarea
+                                value={entries[dateToDay(date, year)] ?? ''}
+                                onChange={(e) => onContentChange(date, e.target.value)}
+                                readOnly={readOnly}
+                                disabled={readOnly}
+                                placeholder={currentMode === 'plan' ? 'Your plan...' : 'What happened?'}
+                                className={`
+                                  flex-1 w-full bg-transparent border-none outline-none resize-none
+                                  text-foreground placeholder:text-muted-foreground
+                                  ${isSunday ? 'text-sm' : 'text-sm'} font-light leading-relaxed overflow-hidden
+                                `}
+                                rows={4}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-
-              {/* Week Days - 7 column grid with tighter spacing */}
-              <div className={`
-                flex-1 grid grid-cols-7 gap-2
-                transition-all duration-500 ease-out
-              `}>
-                {week.dates.map((date, dateIndex) => {
-                  const dayOfWeek = getDay(date);
-                  const isSunday = dayOfWeek === 0;
-
-                  return (
-                    <div
-                      key={dateToDay(date, year)}
-                      className={`
-                        animate-fade-in group/item
-                        ${isSunday ? 'sunday-block' : ''}
-                      `}
-                      style={{
-                        animationDelay: `${(weekIndex * 7 + dateIndex) * 0.02}s`,
-                        animationFillMode: 'backwards'
-                      }}
-                    >
-                      {compareMode ? (
-                        renderCompareContent(date, blockSize, true)
-                      ) : (
-                        <div className={`
-                          h-full bg-white/10 backdrop-blur-md border border-white/20
-                          rounded-xl shadow-sm hover:shadow-md transition-all duration-200 ease-out
-                          hover:scale-[1.02] hover:bg-white/15
-                          focus-within:ring-2 focus-within:ring-primary/50 focus-within:scale-[1.02]
-                          animate-fade-in group overflow-hidden relative
-                          flex flex-col
-                        `}>
-                          <div className="p-3 flex-1 flex flex-col">
-                            {/* Date Header */}
-                            <div className="flex justify-between items-center mb-2">
-                              <time
-                                className={`${isSunday ? 'text-base font-bold' : 'text-sm font-medium'} text-foreground/70`}
-                                dateTime={format(date, 'yyyy-MM-dd')}
-                              >
-                                {format(date, isSunday ? 'EEE, MMM d' : 'EEE d')}
-                              </time>
-                              <div className="w-2 h-2 rounded-full bg-primary/30 group-hover:bg-primary/50 transition-colors" />
-                            </div>
-
-                            {/* Content Textarea */}
-                            <textarea
-                              value={entries[dateToDay(date, year)] ?? ''}
-                              onChange={(e) => onContentChange(date, e.target.value)}
-                              readOnly={readOnly}
-                              disabled={readOnly}
-                              placeholder={currentMode === 'plan' ? 'Your plan...' : 'What happened?'}
-                              className={`
-                                flex-1 w-full bg-transparent border-none outline-none resize-none
-                                text-foreground placeholder:text-muted-foreground
-                                ${isSunday ? 'text-sm' : 'text-sm'} font-light leading-relaxed overflow-hidden
-                              `}
-                              rows={4}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         // Standard Grid Layout
@@ -460,7 +628,7 @@ export default function JournalGrid({
             animationFillMode: 'backwards'
           }}
         >
-          {visibleDates.map((date, index) => renderDateBlock(date, index))}
+          {standardGridNodes}
         </div>
       )}
 

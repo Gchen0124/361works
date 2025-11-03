@@ -128,7 +128,7 @@ export default function JournalBlock({
       <div className={`${sizeConfig.padding} h-full flex flex-col`}>
         {/* Date Header - conditional visibility */}
         {(size !== 'micro' || (showDateOnHover && totalBlocks >= 100)) && (
-          <div className={`flex justify-between items-center ${size === 'micro' ? 'mb-0.5' : 'mb-2'}`}>
+          <div className={`flex items-center ${size === 'micro' ? 'mb-0.5' : 'mb-2'}`}>
             <time 
               className={`${sizeConfig.dateText} font-medium text-foreground/70 ${size === 'micro' && showDateOnHover && totalBlocks >= 100 ? 'absolute top-0.5 left-0.5 bg-black/80 text-white px-1 py-0.5 rounded-sm z-30 opacity-0 group-hover:opacity-100 transition-opacity' : ''}`}
               dateTime={format(date, 'yyyy-MM-dd')}
@@ -136,9 +136,6 @@ export default function JournalBlock({
             >
               {dateFormats[size] && format(date, dateFormats[size])}
             </time>
-            {size !== 'micro' && (
-              <div className="w-2 h-2 rounded-full bg-primary/30 group-hover:bg-primary/50 transition-colors" />
-            )}
           </div>
         )}
         

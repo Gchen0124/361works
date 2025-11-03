@@ -23,6 +23,7 @@ export default function Journal() {
     lastSyncTimestamp,
     setCurrentMode,
     updateEntry,
+    updateWeeklyEntry,
     getCurrentEntries,
     getEntryForMode,
     syncToDatabase,
@@ -225,8 +226,8 @@ export default function Journal() {
             compareMode={!isTimeMachine && compareMode}
             planEntries={planEntries}
             realityEntries={realityEntries}
-            showDateOutside={visibleBlocks < 100}
             weeklyLayout={weeklyLayout}
+            onWeeklyContentChange={!isTimeMachine ? updateWeeklyEntry : undefined}
           />
         </div>
       </main>

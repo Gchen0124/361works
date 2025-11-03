@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { format } from 'date-fns';
+import { format, getWeek } from 'date-fns';
 import { journalAPI } from '@/lib/journalAPI';
 
 export type JournalMode = 'plan' | 'reality';
@@ -15,6 +15,11 @@ export function dateToDay(date: Date, year: number): string {
 export function dayToDate(dayKey: string, year: number): Date {
   const dayNumber = parseInt(dayKey.replace('day_', ''));
   return new Date(year, 0, dayNumber);
+}
+
+export function dateToWeekKey(date: Date, year: number): string {
+  const weekNumber = getWeek(date, { weekStartsOn: 0, firstWeekContainsDate: 1 });
+  return `week_${year}_${String(weekNumber).padStart(2, '0')}`;
 }
 
 // Migration function to convert old date format to new day format
@@ -54,8 +59,10 @@ interface UseJournalDataReturn {
   lastSyncTimestamp: Date | null;
   setCurrentMode: (mode: JournalMode) => void;
   updateEntry: (date: Date, content: string) => void;
+  updateWeeklyEntry: (weekKey: string, content: string, mode?: JournalMode) => void;
   getCurrentEntries: () => JournalEntries;
   getEntryForMode: (date: Date, mode: JournalMode) => string;
+  getWeeklyEntry: (weekKey: string, mode: JournalMode) => string;
   syncToDatabase: () => Promise<void>;
   loadFromDatabase: () => Promise<void>;
 }
@@ -253,6 +260,41 @@ export function useJournalData(year: number): UseJournalDataReturn {
     });
   }, [autoSaveToDatabase]);
 
+  const updateWeeklyEntry = useCallback((weekKey: string, content: string, mode?: JournalMode) => {
+    setJournalData(prev => {
+      const targetMode = mode ?? prev.currentMode;
+      const updatedData = { ...prev };
+
+      if (targetMode === 'plan') {
+        const updatedPlan = {
+          ...prev.planEntries,
+          [weekKey]: content
+        };
+
+        if (!content.trim()) {
+          delete updatedPlan[weekKey];
+        }
+
+        updatedData.planEntries = updatedPlan;
+        autoSaveToDatabase('plan', updatedPlan);
+      } else {
+        const updatedReality = {
+          ...prev.realityEntries,
+          [weekKey]: content
+        };
+
+        if (!content.trim()) {
+          delete updatedReality[weekKey];
+        }
+
+        updatedData.realityEntries = updatedReality;
+        autoSaveToDatabase('reality', updatedReality);
+      }
+
+      return updatedData;
+    });
+  }, [autoSaveToDatabase]);
+
   const getCurrentEntries = useCallback((): JournalEntries => {
     return journalData.currentMode === 'plan'
       ? journalData.planEntries
@@ -264,6 +306,11 @@ export function useJournalData(year: number): UseJournalDataReturn {
     const entries = mode === 'plan' ? journalData.planEntries : journalData.realityEntries;
     return entries[dayKey] || '';
   }, [journalData.planEntries, journalData.realityEntries, year]);
+
+  const getWeeklyEntry = useCallback((weekKey: string, mode: JournalMode): string => {
+    const entries = mode === 'plan' ? journalData.planEntries : journalData.realityEntries;
+    return entries[weekKey] || '';
+  }, [journalData.planEntries, journalData.realityEntries]);
 
   const syncToDatabase = useCallback(async () => {
     if (!journalData.isOnline) {
@@ -314,8 +361,10 @@ export function useJournalData(year: number): UseJournalDataReturn {
     lastSyncTimestamp: journalData.lastSyncTimestamp,
     setCurrentMode,
     updateEntry,
+    updateWeeklyEntry,
     getCurrentEntries,
     getEntryForMode,
+    getWeeklyEntry,
     syncToDatabase,
     loadFromDatabase
   };
