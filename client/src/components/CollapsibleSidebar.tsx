@@ -124,6 +124,7 @@ export default function CollapsibleSidebar({
                 onClick={() => {
                   onVisibleBlocksChange(30);
                   onStartDateChange(new Date());
+                  onWeeklyLayoutChange?.(false);
                 }}
                 className="w-full justify-start hover-elevate"
                 data-testid="button-this-month"
@@ -136,6 +137,7 @@ export default function CollapsibleSidebar({
                 onClick={() => {
                   onVisibleBlocksChange(100);
                   onStartDateChange(startOfYear(new Date()));
+                  onWeeklyLayoutChange?.(false);
                 }}
                 className="w-full justify-start hover-elevate"
                 data-testid="button-100-days"
@@ -148,6 +150,7 @@ export default function CollapsibleSidebar({
                 onClick={() => {
                   onVisibleBlocksChange(361);
                   onStartDateChange(startOfYear(new Date()));
+                  onWeeklyLayoutChange?.(false);
                 }}
                 className="w-full justify-start hover-elevate"
                 data-testid="button-361-days"
@@ -160,6 +163,7 @@ export default function CollapsibleSidebar({
                 onClick={() => {
                   onVisibleBlocksChange(365);
                   onStartDateChange(startOfYear(new Date()));
+                  onWeeklyLayoutChange?.(false);
                 }}
                 className="w-full justify-start hover-elevate"
                 data-testid="button-full-year"

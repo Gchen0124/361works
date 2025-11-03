@@ -511,7 +511,7 @@ export default function JournalGrid({
     );
   };
 
-  const shouldShowWeeklySummary = !weeklyLayout && visibleBlocks <= 7;
+  const shouldShowWeeklySummary = !weeklyLayout && compareMode && visibleBlocks <= 7;
   const standardGridNodes: JSX.Element[] = [];
   const renderedWeekKeys = new Set<string>();
 
