@@ -227,7 +227,8 @@ export default function JournalGrid({
     sizeKey,
     placeholder,
     ariaLabel,
-    onChange
+    onChange,
+    panelKey
   }: {
     mode: JournalMode;
     content: string;
@@ -236,6 +237,7 @@ export default function JournalGrid({
     placeholder: string;
     ariaLabel: string;
     onChange?: (value: string) => void;
+    panelKey?: string;
   }) => {
     const palette = comparePalettes[mode];
     const sizeStyles = compareSizeStyles[sizeKey];
@@ -257,7 +259,7 @@ export default function JournalGrid({
 
     if (canEdit) {
       return (
-        <div className={containerClasses}>
+        <div className={containerClasses} key={panelKey}>
           <textarea
             aria-label={ariaLabel}
             value={content}
@@ -272,7 +274,7 @@ export default function JournalGrid({
     }
 
     return (
-      <div className={containerClasses}>
+      <div className={containerClasses} key={panelKey}>
         <div
           aria-label={ariaLabel}
           className={`whitespace-pre-wrap break-words ${palette.reference} ${bodyBaseClasses}`}
@@ -325,7 +327,8 @@ export default function JournalGrid({
             sizeKey,
             placeholder: editablePlaceholder,
             ariaLabel: editableMode === 'plan' ? 'Plan entry' : 'Reality entry',
-            onChange: isEditable ? onEditableChange : undefined
+            onChange: isEditable ? onEditableChange : undefined,
+            panelKey: `${label}-editable`
           })}
           {renderModePanel({
             mode: referenceMode,
@@ -333,7 +336,8 @@ export default function JournalGrid({
             isEditable: false,
             sizeKey,
             placeholder: referencePlaceholder,
-            ariaLabel: referenceMode === 'plan' ? 'Plan reference' : 'Reality reference'
+            ariaLabel: referenceMode === 'plan' ? 'Plan reference' : 'Reality reference',
+            panelKey: `${label}-reference`
           })}
         </div>
       </div>
@@ -410,33 +414,68 @@ export default function JournalGrid({
     return map;
   }, [visibleDates, year]);
 
-  const renderWeeklyStack = (weekInfo: WeekSummaryInfo, sizeKey: BlockSizeVariant) => {
+  const renderWeeklySummaryBlock = (weekInfo: WeekSummaryInfo, sizeKey: BlockSizeVariant) => {
     const summarySize: BlockSizeVariant = sizeKey === 'micro' ? 'small' : sizeKey;
     const planContent = planEntries[weekInfo.weekKey] ?? '';
     const realityContent = realityEntries[weekInfo.weekKey] ?? '';
 
-    const editableMode = currentMode;
+    const activeMode = currentMode;
     const referenceMode: JournalMode = currentMode === 'plan' ? 'reality' : 'plan';
-    const editableContent = editableMode === 'plan' ? planContent : realityContent;
+    const activeContent = activeMode === 'plan' ? planContent : realityContent;
     const referenceContent = referenceMode === 'plan' ? planContent : realityContent;
 
-    const canEditWeekly = !readOnly && typeof onWeeklyContentChange === 'function';
+    const isEditable = !readOnly && typeof onWeeklyContentChange === 'function';
+    const handleActiveChange = isEditable && onWeeklyContentChange
+      ? (value: string) => onWeeklyContentChange(weekInfo.weekKey, value)
+      : undefined;
 
-    return renderModeStack({
-      label: weekInfo.label,
-      dateTime: weekInfo.dateTime,
-      sizeKey: summarySize,
-      editableMode,
-      editableContent,
-      editablePlaceholder: editableMode === 'plan' ? 'Weekly objectives...' : 'Weekly highlights...',
-      onEditableChange: canEditWeekly && onWeeklyContentChange
-        ? (value: string) => onWeeklyContentChange(weekInfo.weekKey, value)
-        : undefined,
-      referenceMode,
-      referenceContent,
-      referencePlaceholder: referenceMode === 'plan' ? 'Weekly objectives...' : 'Weekly highlights...',
-      isEditable: canEditWeekly
-    });
+    const panels: JSX.Element[] = [];
+
+    panels.push(
+      renderModePanel({
+        mode: activeMode,
+        content: activeContent,
+        isEditable,
+        sizeKey: summarySize,
+        placeholder: activeMode === 'plan' ? 'Weekly objectives...' : 'Weekly highlights...',
+        ariaLabel: activeMode === 'plan' ? 'Weekly plan' : 'Weekly reality',
+        onChange: handleActiveChange,
+        panelKey: `${weekInfo.weekKey}-${activeMode}-weekly`
+      })
+    );
+
+    if (compareMode) {
+      panels.push(
+        renderModePanel({
+          mode: referenceMode,
+          content: referenceContent,
+          isEditable: false,
+          sizeKey: summarySize,
+          placeholder: referenceMode === 'plan' ? 'Weekly objectives...' : 'Weekly highlights...',
+          ariaLabel: referenceMode === 'plan' ? 'Weekly plan reference' : 'Weekly reality reference',
+          panelKey: `${weekInfo.weekKey}-${referenceMode}-weekly`
+        })
+      );
+    }
+
+    return (
+      <div className="flex items-stretch gap-3 sm:gap-4">
+        <div className="flex-shrink-0">
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-4 min-w-[4.25rem] text-center h-full flex flex-col justify-center">
+            <div className="text-[0.65rem] text-foreground/60 uppercase tracking-wide">Week</div>
+            <div className="text-lg font-bold text-foreground/90">{weekInfo.weekNumber}</div>
+          </div>
+        </div>
+        <div className="flex-1 flex flex-col gap-2">
+          <time className={`${compareSizeStyles[summarySize].header} font-semibold tracking-wide text-foreground/90`} dateTime={weekInfo.dateTime}>
+            {weekInfo.label}
+          </time>
+          <div className={`flex flex-col ${compareStackGap[summarySize]}`}>
+            {panels}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // Render helper for a single date block
@@ -484,7 +523,7 @@ export default function JournalGrid({
         renderedWeekKeys.add(summaryInfo.weekKey);
         standardGridNodes.push(
           <div key={`${summaryInfo.weekKey}-summary`} className="col-span-full mb-4">
-            {renderWeeklyStack(summaryInfo, blockSize)}
+            {renderWeeklySummaryBlock(summaryInfo, blockSize)}
           </div>
         );
       }
@@ -527,19 +566,8 @@ export default function JournalGrid({
                 key={`${weekInfo.weekKey}-${weekIndex}`}
                 className="flex flex-col gap-4 lg:flex-row lg:items-start"
               >
-                <div className="flex flex-row gap-3 lg:flex-col lg:w-64">
-                  {/* Week Number */}
-                  <div className="flex-shrink-0 flex items-center">
-                    <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-4 min-w-[4.5rem] text-center">
-                      <div className="text-[0.65rem] text-foreground/60 uppercase tracking-wide">Week</div>
-                      <div className="text-lg font-bold text-foreground/90">{weekInfo.weekNumber}</div>
-                    </div>
-                  </div>
-
-                  {/* Weekly Summary */}
-                  <div className="flex-1 min-w-[14rem]">
-                    {renderWeeklyStack(weekInfo, blockSize)}
-                  </div>
+                <div className="lg:w-[22rem] xl:w-[24rem]">
+                  {renderWeeklySummaryBlock(weekInfo, blockSize)}
                 </div>
 
                 {/* Week Days */}
