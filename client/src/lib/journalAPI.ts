@@ -27,10 +27,24 @@ export class JournalAPI {
   private static instance: JournalAPI;
   private userId: string = 'default-user'; // In a real app, this would come from auth
   // Backend server URL; configurable via Vite env for local differences (e.g., 5000/5001)
-  private baseURL: string = (import.meta as any)?.env?.VITE_API_BASE_URL ||
-    (typeof window !== 'undefined'
-      ? `${window.location.protocol}//${window.location.hostname}:5001`
-      : 'http://localhost:5001');
+  private baseURL: string = (() => {
+    const env = (import.meta as any)?.env;
+    if (env?.VITE_API_BASE_URL) {
+      return env.VITE_API_BASE_URL;
+    }
+
+    if (typeof window === 'undefined') {
+      return 'http://localhost:5001';
+    }
+
+    if (env?.DEV) {
+      const devPort = env?.VITE_API_PORT || '5001';
+      return `${window.location.protocol}//${window.location.hostname}:${devPort}`;
+    }
+
+    // Production fallback: same origin the app was served from
+    return window.location.origin;
+  })();
 
   static getInstance(): JournalAPI {
     if (!JournalAPI.instance) {
