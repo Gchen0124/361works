@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { format, getWeek } from 'date-fns';
 import { journalAPI } from '@/lib/journalAPI';
 import { appendLocalSnapshot } from '@/lib/localTimeline';
+import { getNamespacedKey, getUserStorageKey } from '@/lib/userStorage';
 
 export type JournalMode = 'plan' | 'reality';
 // Updated to use day_XXX format aligned with database structure
@@ -74,17 +75,40 @@ interface UseJournalDataReturn {
   loadFromDatabase: () => Promise<void>;
 }
 
-export function useJournalData(year: number): UseJournalDataReturn {
-  const [journalData, setJournalData] = useState<JournalData>({
-    planEntries: {},
-    realityEntries: {},
-    currentMode: 'plan', // Start with plan mode (dark mode equivalent)
-    isOnline: false,
-    lastSyncTimestamp: null
-  });
+interface UseJournalDataOptions {
+  userId?: string;
+}
+
+const buildInitialJournalState = (mode: JournalMode = 'plan'): JournalData => ({
+  planEntries: {},
+  realityEntries: {},
+  currentMode: mode,
+  isOnline: false,
+  lastSyncTimestamp: null
+});
+
+export function useJournalData(year: number, options: UseJournalDataOptions = {}): UseJournalDataReturn {
+  const storageUserKey = getUserStorageKey(options.userId);
+
+  const storageKeys = useMemo(() => ({
+    plan: getNamespacedKey(storageUserKey, `plan-${year}`),
+    reality: getNamespacedKey(storageUserKey, `reality-${year}`),
+    mode: getNamespacedKey(storageUserKey, 'current-mode'),
+    lastSync: getNamespacedKey(storageUserKey, `last-sync-${year}`)
+  }), [storageUserKey, year]);
+
+  const [journalData, setJournalData] = useState<JournalData>(() => buildInitialJournalState());
 
   // Debounce timer for auto-save
   const autoSaveTimerRef = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    journalAPI.setUser(options.userId ?? 'default-user');
+  }, [options.userId]);
+
+  useEffect(() => {
+    setJournalData(buildInitialJournalState());
+  }, [storageUserKey, year]);
 
   // Check API connectivity
   const checkConnectivity = useCallback(async () => {
@@ -103,19 +127,19 @@ export function useJournalData(year: number): UseJournalDataReturn {
     const loadJournalData = async () => {
       try {
         // Load plan entries
-        const savedPlanEntries = localStorage.getItem(`journal-plan-${year}`);
+        const savedPlanEntries = localStorage.getItem(storageKeys.plan);
         const planEntries = savedPlanEntries ? migrateOldFormatToNewFormat(JSON.parse(savedPlanEntries), year) : {};
 
         // Load reality entries
-        const savedRealityEntries = localStorage.getItem(`journal-reality-${year}`);
+        const savedRealityEntries = localStorage.getItem(storageKeys.reality);
         const realityEntries = savedRealityEntries ? migrateOldFormatToNewFormat(JSON.parse(savedRealityEntries), year) : {};
 
         // Load current mode preference
-        const savedMode = localStorage.getItem('journal-current-mode') as JournalMode;
+        const savedMode = localStorage.getItem(storageKeys.mode) as JournalMode;
         const currentMode = savedMode || 'plan';
 
         // Load last sync timestamp
-        const lastSyncStr = localStorage.getItem(`journal-last-sync-${year}`);
+        const lastSyncStr = localStorage.getItem(storageKeys.lastSync);
         const lastSyncTimestamp = lastSyncStr ? new Date(lastSyncStr) : null;
 
         setJournalData({
@@ -156,22 +180,22 @@ export function useJournalData(year: number): UseJournalDataReturn {
     };
 
     loadJournalData();
-  }, [year, checkConnectivity]);
+  }, [year, storageKeys, checkConnectivity]);
 
   // Save data to localStorage whenever it changes
   useEffect(() => {
     if (Object.keys(journalData.planEntries).length > 0) {
-      localStorage.setItem(`journal-plan-${year}`, JSON.stringify(journalData.planEntries));
+      localStorage.setItem(storageKeys.plan, JSON.stringify(journalData.planEntries));
       console.log(`💾 Saved ${Object.keys(journalData.planEntries).length} plan entries for ${year}`);
     }
-  }, [journalData.planEntries, year]);
+  }, [journalData.planEntries, storageKeys.plan]);
 
   useEffect(() => {
     if (Object.keys(journalData.realityEntries).length > 0) {
-      localStorage.setItem(`journal-reality-${year}`, JSON.stringify(journalData.realityEntries));
+      localStorage.setItem(storageKeys.reality, JSON.stringify(journalData.realityEntries));
       console.log(`💾 Saved ${Object.keys(journalData.realityEntries).length} reality entries for ${year}`);
     }
-  }, [journalData.realityEntries, year]);
+  }, [journalData.realityEntries, storageKeys.reality]);
 
   // Persist lightweight timeline snapshots locally for offline Time Machine
   useEffect(() => {
@@ -184,7 +208,7 @@ export function useJournalData(year: number): UseJournalDataReturn {
     if (!hasEntries) return;
 
     const timer = setTimeout(() => {
-      appendLocalSnapshot(year, {
+      appendLocalSnapshot(storageUserKey, year, {
         plan_contents: journalData.planEntries,
         reality_contents: journalData.realityEntries,
       });
@@ -193,17 +217,17 @@ export function useJournalData(year: number): UseJournalDataReturn {
     return () => {
       clearTimeout(timer);
     };
-  }, [journalData.planEntries, journalData.realityEntries, year]);
+  }, [journalData.planEntries, journalData.realityEntries, storageUserKey, year]);
 
   useEffect(() => {
-    localStorage.setItem('journal-current-mode', journalData.currentMode);
-  }, [journalData.currentMode]);
+    localStorage.setItem(storageKeys.mode, journalData.currentMode);
+  }, [journalData.currentMode, storageKeys.mode]);
 
   useEffect(() => {
     if (journalData.lastSyncTimestamp) {
-      localStorage.setItem(`journal-last-sync-${year}`, journalData.lastSyncTimestamp.toISOString());
+      localStorage.setItem(storageKeys.lastSync, journalData.lastSyncTimestamp.toISOString());
     }
-  }, [journalData.lastSyncTimestamp, year]);
+  }, [journalData.lastSyncTimestamp, storageKeys.lastSync]);
 
   // Internal database loading function
   const loadFromDatabaseInternal = useCallback(async () => {

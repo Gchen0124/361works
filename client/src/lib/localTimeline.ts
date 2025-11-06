@@ -1,4 +1,5 @@
 import type { JournalEntries } from '@/hooks/useJournalData';
+import { getNamespacedKey } from '@/lib/userStorage';
 
 export interface LocalTimelineSnapshot {
   timestamp: string;
@@ -9,7 +10,8 @@ export interface LocalTimelineSnapshot {
 
 const MAX_LOCAL_SNAPSHOTS = 40;
 
-const getTimelineKey = (year: number) => `journal-local-timeline-${year}`;
+const getTimelineKey = (userKey: string, year: number) =>
+  getNamespacedKey(userKey, `local-timeline-${year}`);
 
 const getStorage = (): Storage | null => {
   if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
@@ -18,12 +20,12 @@ const getStorage = (): Storage | null => {
   return window.localStorage;
 };
 
-export function loadLocalTimeline(year: number): LocalTimelineSnapshot[] {
+export function loadLocalTimeline(userKey: string, year: number): LocalTimelineSnapshot[] {
   const storage = getStorage();
   if (!storage) return [];
 
   try {
-    const raw = storage.getItem(getTimelineKey(year));
+    const raw = storage.getItem(getTimelineKey(userKey, year));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
@@ -36,12 +38,12 @@ export function loadLocalTimeline(year: number): LocalTimelineSnapshot[] {
   }
 }
 
-function persistLocalTimeline(year: number, snapshots: LocalTimelineSnapshot[]): void {
+function persistLocalTimeline(userKey: string, year: number, snapshots: LocalTimelineSnapshot[]): void {
   const storage = getStorage();
   if (!storage) return;
 
   try {
-    storage.setItem(getTimelineKey(year), JSON.stringify(snapshots));
+    storage.setItem(getTimelineKey(userKey, year), JSON.stringify(snapshots));
   } catch (error) {
     console.warn('Failed to persist local timeline:', error);
   }
@@ -52,10 +54,11 @@ function entriesSignature(plan: JournalEntries, reality: JournalEntries): string
 }
 
 export function appendLocalSnapshot(
+  userKey: string,
   year: number,
   snapshot: Omit<LocalTimelineSnapshot, 'timestamp' | 'year'> & { timestamp?: string; year?: number },
 ): LocalTimelineSnapshot[] {
-  const existing = loadLocalTimeline(year);
+  const existing = loadLocalTimeline(userKey, year);
   const timestamp = snapshot.timestamp ?? new Date().toISOString();
 
   const planClone = JSON.parse(JSON.stringify(snapshot.plan_contents ?? {}));
@@ -82,12 +85,12 @@ export function appendLocalSnapshot(
     updated.splice(0, updated.length - MAX_LOCAL_SNAPSHOTS);
   }
 
-  persistLocalTimeline(year, updated);
+  persistLocalTimeline(userKey, year, updated);
   return updated;
 }
 
-export function clearLocalTimeline(year: number): void {
+export function clearLocalTimeline(userKey: string, year: number): void {
   const storage = getStorage();
   if (!storage) return;
-  storage.removeItem(getTimelineKey(year));
+  storage.removeItem(getTimelineKey(userKey, year));
 }

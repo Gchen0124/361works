@@ -7,8 +7,10 @@ import { Moon, Sun, BookOpen, ChevronRight, ChevronLeft, Target, CheckCircle } f
 import { useJournalData, type JournalMode } from '@/hooks/useJournalData';
 import { useTimeMachine } from '/src/hooks/useTimeMachine.ts';
 import TimeMachineBar from '/src/components/TimeMachineBar.tsx';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Journal() {
+  const { user } = useAuth();
   const [visibleBlocks, setVisibleBlocks] = useState(30);
   const [startDate, setStartDate] = useState(startOfYear(new Date()));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -28,11 +30,11 @@ export default function Journal() {
     getEntryForMode,
     syncToDatabase,
     loadFromDatabase
-  } = useJournalData(currentYear);
+  } = useJournalData(currentYear, { userId: user?.id });
 
   // Time Machine state
   const [isTimeMachine, setIsTimeMachine] = useState(false);
-  const tm = useTimeMachine(currentYear);
+  const tm = useTimeMachine(currentYear, { userId: user?.id });
   const [compareMode, setCompareMode] = useState(false);
   const [weeklyLayout, setWeeklyLayout] = useState(false);
 

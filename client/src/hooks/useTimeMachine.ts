@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { journalAPI } from '@/lib/journalAPI';
 import type { JournalEntries } from '@/hooks/useJournalData';
 import { loadLocalTimeline, type LocalTimelineSnapshot } from '@/lib/localTimeline';
+import { getUserStorageKey } from '@/lib/userStorage';
 
 export interface TimeMachineState {
   timeline: { timestamp: string; entry_type: string }[];
@@ -17,16 +18,28 @@ export interface TimeMachineState {
   timelineSource: 'remote' | 'local' | null;
 }
 
-export function useTimeMachine(year: number) {
-  const [state, setState] = useState<TimeMachineState>({
-    timeline: [],
-    selectedIndex: -1,
-    snapshot: null,
-    loading: false,
-    error: null,
-    timelineSource: null,
-  });
+interface UseTimeMachineOptions {
+  userId?: string;
+}
+
+const createInitialTimeMachineState = (): TimeMachineState => ({
+  timeline: [],
+  selectedIndex: -1,
+  snapshot: null,
+  loading: false,
+  error: null,
+  timelineSource: null,
+});
+
+export function useTimeMachine(year: number, options: UseTimeMachineOptions = {}) {
+  const storageUserKey = getUserStorageKey(options.userId);
+  const [state, setState] = useState<TimeMachineState>(() => createInitialTimeMachineState());
   const localTimelineCache = useRef<Record<string, LocalTimelineSnapshot>>({});
+
+  useEffect(() => {
+    setState(createInitialTimeMachineState());
+    localTimelineCache.current = {};
+  }, [storageUserKey, year]);
 
   const loadTimeline = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
@@ -41,7 +54,7 @@ export function useTimeMachine(year: number) {
         timelineSource: 'remote',
       }));
     } catch (e: any) {
-      const localTimeline = loadLocalTimeline(year);
+      const localTimeline = loadLocalTimeline(storageUserKey, year);
       if (localTimeline.length > 0) {
         localTimelineCache.current = localTimeline.reduce<Record<string, LocalTimelineSnapshot>>((acc, snapshot) => {
           acc[snapshot.timestamp] = snapshot;
@@ -74,7 +87,7 @@ export function useTimeMachine(year: number) {
         }));
       }
     }
-  }, [year]);
+  }, [year, storageUserKey]);
 
   const loadSnapshotAt = useCallback(async (index: number) => {
     setState((s) => ({ ...s, loading: true, error: null, selectedIndex: index }));

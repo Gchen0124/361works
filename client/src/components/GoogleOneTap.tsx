@@ -49,8 +49,8 @@ export function GoogleOneTap({ onSuccess }: GoogleOneTapProps) {
         );
       }
 
-      // Optional: Show One Tap prompt automatically
-      // window.google.accounts.id.prompt();
+      // Show One Tap prompt automatically so users can sign in quickly
+      window.google.accounts.id.prompt();
     };
 
     return () => {

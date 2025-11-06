@@ -53,6 +53,14 @@ export class JournalAPI {
     return JournalAPI.instance;
   }
 
+  setUser(userId?: string) {
+    if (userId && userId.trim().length > 0) {
+      this.userId = userId.trim();
+    } else {
+      this.userId = 'default-user';
+    }
+  }
+
   async saveSnapshot(mode: JournalMode, entries: JournalEntries, year: number): Promise<JournalSnapshot> {
     const endpoint = mode === 'plan' ? '/api/matrix/plan' : '/api/matrix/reality';
 
