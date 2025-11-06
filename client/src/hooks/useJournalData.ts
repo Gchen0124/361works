@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { format, getWeek } from 'date-fns';
 import { journalAPI } from '@/lib/journalAPI';
+import { appendLocalSnapshot } from '@/lib/localTimeline';
 
 export type JournalMode = 'plan' | 'reality';
 // Updated to use day_XXX format aligned with database structure
@@ -171,6 +172,28 @@ export function useJournalData(year: number): UseJournalDataReturn {
       console.log(`💾 Saved ${Object.keys(journalData.realityEntries).length} reality entries for ${year}`);
     }
   }, [journalData.realityEntries, year]);
+
+  // Persist lightweight timeline snapshots locally for offline Time Machine
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const hasEntries =
+      Object.keys(journalData.planEntries).length > 0 ||
+      Object.keys(journalData.realityEntries).length > 0;
+
+    if (!hasEntries) return;
+
+    const timer = setTimeout(() => {
+      appendLocalSnapshot(year, {
+        plan_contents: journalData.planEntries,
+        reality_contents: journalData.realityEntries,
+      });
+    }, 1500);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [journalData.planEntries, journalData.realityEntries, year]);
 
   useEffect(() => {
     localStorage.setItem('journal-current-mode', journalData.currentMode);
