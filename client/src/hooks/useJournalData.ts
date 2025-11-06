@@ -27,17 +27,23 @@ function migrateOldFormatToNewFormat(entries: Record<string, string>, year: numb
   const migratedEntries: Record<string, string> = {};
 
   Object.entries(entries).forEach(([key, content]) => {
-    if (key.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
       // Old date format (YYYY-MM-DD)
       const date = new Date(key);
       if (!isNaN(date.getTime()) && date.getFullYear() === year) {
         const dayKey = dateToDay(date, year);
         migratedEntries[dayKey] = content;
       }
-    } else if (key.startsWith('day_')) {
-      // Already new format
-      migratedEntries[key] = content;
+      return;
     }
+
+    if (key.startsWith('day_') || key.startsWith('week_')) {
+      migratedEntries[key] = content;
+      return;
+    }
+
+    // Preserve any other keyed entries so we do not drop future formats during migration
+    migratedEntries[key] = content;
   });
 
   return migratedEntries;
