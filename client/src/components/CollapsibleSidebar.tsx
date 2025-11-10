@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ZoomControls from './ZoomControls';
@@ -40,9 +39,12 @@ export default function CollapsibleSidebar({
     <>
       {/* Sidebar */}
       <div 
+        aria-hidden={isCollapsed}
         className={`
-          fixed left-0 top-0 h-screen z-30 w-80 transition-transform duration-300 ease-out
-          ${isCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0 pointer-events-auto'}
+          fixed left-0 top-0 h-screen z-30 w-80 transition-all duration-300 ease-out
+          ${isCollapsed 
+            ? '-translate-x-[calc(100%+1.5rem)] opacity-0 pointer-events-none' 
+            : 'translate-x-0 opacity-100 pointer-events-auto'}
           bg-white/10 backdrop-blur-xl border-r border-white/20 overflow-hidden
         `}
         data-testid="collapsible-sidebar"
