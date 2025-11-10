@@ -41,10 +41,9 @@ export default function CollapsibleSidebar({
       {/* Sidebar */}
       <div 
         className={`
-          fixed left-0 top-0 h-screen z-30 transition-transform duration-300 ease-out
-          ${isCollapsed ? '-translate-x-full' : 'translate-x-0'}
-          bg-white/10 backdrop-blur-xl border-r border-white/20
-          ${isCollapsed ? 'w-0' : 'w-80'}
+          fixed left-0 top-0 h-screen z-30 w-80 transition-transform duration-300 ease-out
+          ${isCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0 pointer-events-auto'}
+          bg-white/10 backdrop-blur-xl border-r border-white/20 overflow-hidden
         `}
         data-testid="collapsible-sidebar"
       >
