@@ -777,14 +777,20 @@ export const dailySnapshots = sqliteTable("daily_snapshots", {
   user_id: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   snapshot_date: integer("snapshot_date", { mode: "timestamp" }).notNull(), // Date of the snapshot
   year: integer("year").notNull(),
-  // Latest content for each day
+  // Latest content for each day (daily data)
   latest_plan_contents: text("latest_plan_contents", { mode: "json" }).notNull(),
   latest_reality_contents: text("latest_reality_contents", { mode: "json" }).notNull(),
+  // Latest content for each week (weekly data) - week_001 to week_053
+  latest_weekly_plan_contents: text("latest_weekly_plan_contents", { mode: "json" }),
+  latest_weekly_reality_contents: text("latest_weekly_reality_contents", { mode: "json" }),
   // Timestamps of latest updates
   plan_last_updated: integer("plan_last_updated", { mode: "timestamp" }),
   reality_last_updated: integer("reality_last_updated", { mode: "timestamp" }),
+  weekly_plan_last_updated: integer("weekly_plan_last_updated", { mode: "timestamp" }),
+  weekly_reality_last_updated: integer("weekly_reality_last_updated", { mode: "timestamp" }),
   // Statistics
-  completion_rate: integer("completion_rate").default(0), // % of plans that became reality
+  completion_rate: integer("completion_rate").default(0), // % of daily plans that became reality
+  weekly_completion_rate: integer("weekly_completion_rate").default(0), // % of weekly plans that became reality
   created_at: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
   updated_at: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 }, (table) => ({
@@ -983,3 +989,28 @@ export type TimeMachineComparison = z.infer<typeof timeMachineComparisonSchema>;
 
 // Helper type for day contents
 export type DayContents = Record<string, string | null>;
+
+// Helper type for week contents (week_001 to week_053)
+export type WeekContents = Record<string, string | null>;
+
+// Helper function to get week number from date (ISO 8601 week numbering)
+export function dateToWeek(date: Date, year: number): string {
+  // Get week number (1-53)
+  const firstDayOfYear = new Date(year, 0, 1);
+  const dayOfYear = Math.floor((date.getTime() - firstDayOfYear.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const weekNumber = Math.ceil(dayOfYear / 7);
+  return `week_${String(weekNumber).padStart(3, '0')}`;
+}
+
+// Helper function to convert week key to date range
+export function weekToDateRange(weekKey: string, year: number): { start: Date; end: Date } {
+  const weekNumber = parseInt(weekKey.replace('week_', ''));
+  const firstDayOfYear = new Date(year, 0, 1);
+  const startDayOfYear = (weekNumber - 1) * 7 + 1;
+  const endDayOfYear = Math.min(startDayOfYear + 6, 365);
+
+  const start = new Date(year, 0, startDayOfYear);
+  const end = new Date(year, 0, endDayOfYear);
+
+  return { start, end };
+}

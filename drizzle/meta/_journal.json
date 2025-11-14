@@ -8,6 +8,13 @@
       "when": 1758770767401,
       "tag": "0000_overrated_iron_fist",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1731599999999,
+      "tag": "0001_add_weekly_data",
+      "breakpoints": true
     }
   ]
 }

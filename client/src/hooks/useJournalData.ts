@@ -72,14 +72,21 @@ export function useJournalData(year: number): UseJournalDataReturn {
   // Debounce timer for auto-save
   const autoSaveTimerRef = useRef<NodeJS.Timeout>();
 
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
   // Check API connectivity
   const checkConnectivity = useCallback(async () => {
     try {
       const isHealthy = await journalAPI.healthCheck();
-      setJournalData(prev => ({ ...prev, isOnline: isHealthy }));
+      if (isMountedRef.current) {
+        setJournalData(prev => ({ ...prev, isOnline: isHealthy }));
+      }
       return isHealthy;
     } catch (error) {
-      setJournalData(prev => ({ ...prev, isOnline: false }));
+      if (isMountedRef.current) {
+        setJournalData(prev => ({ ...prev, isOnline: false }));
+      }
       return false;
     }
   }, []);
@@ -104,13 +111,15 @@ export function useJournalData(year: number): UseJournalDataReturn {
         const lastSyncStr = localStorage.getItem(`journal-last-sync-${year}`);
         const lastSyncTimestamp = lastSyncStr ? new Date(lastSyncStr) : null;
 
-        setJournalData({
-          planEntries,
-          realityEntries,
-          currentMode,
-          isOnline: false, // Will be updated by connectivity check
-          lastSyncTimestamp
-        });
+        if (isMountedRef.current) {
+          setJournalData({
+            planEntries,
+            realityEntries,
+            currentMode,
+            isOnline: false, // Will be updated by connectivity check
+            lastSyncTimestamp
+          });
+        }
 
         console.log(`🔄 Loaded journal data for ${year}:`, {
           planCount: Object.keys(planEntries).length,
@@ -121,9 +130,9 @@ export function useJournalData(year: number): UseJournalDataReturn {
 
         // Check connectivity and try to sync with database
         const isOnline = await checkConnectivity();
-        if (isOnline) {
+        if (isOnline && isMountedRef.current) {
           try {
-            await loadFromDatabaseInternal();
+            await loadFromDatabaseInternal(planEntries, realityEntries, lastSyncTimestamp);
           } catch (error) {
             console.warn('Failed to load from database, using localStorage data:', error);
           }
@@ -131,31 +140,38 @@ export function useJournalData(year: number): UseJournalDataReturn {
 
       } catch (error) {
         console.error('Failed to load journal data:', error);
-        setJournalData({
-          planEntries: {},
-          realityEntries: {},
-          currentMode: 'plan',
-          isOnline: false,
-          lastSyncTimestamp: null
-        });
+        if (isMountedRef.current) {
+          setJournalData({
+            planEntries: {},
+            realityEntries: {},
+            currentMode: 'plan',
+            isOnline: false,
+            lastSyncTimestamp: null
+          });
+        }
       }
     };
 
     loadJournalData();
-  }, [year, checkConnectivity]);
+  }, [year]); // Remove checkConnectivity from dependencies
 
   // Save data to localStorage whenever it changes
+  // IMPORTANT: Always save, even if empty (to handle deletion case)
   useEffect(() => {
-    if (Object.keys(journalData.planEntries).length > 0) {
+    try {
       localStorage.setItem(`journal-plan-${year}`, JSON.stringify(journalData.planEntries));
-      console.log(`💾 Saved ${Object.keys(journalData.planEntries).length} plan entries for ${year}`);
+      console.log(`💾 Saved ${Object.keys(journalData.planEntries).length} plan entries to localStorage for ${year}`);
+    } catch (error) {
+      console.error('Failed to save plan entries to localStorage:', error);
     }
   }, [journalData.planEntries, year]);
 
   useEffect(() => {
-    if (Object.keys(journalData.realityEntries).length > 0) {
+    try {
       localStorage.setItem(`journal-reality-${year}`, JSON.stringify(journalData.realityEntries));
-      console.log(`💾 Saved ${Object.keys(journalData.realityEntries).length} reality entries for ${year}`);
+      console.log(`💾 Saved ${Object.keys(journalData.realityEntries).length} reality entries to localStorage for ${year}`);
+    } catch (error) {
+      console.error('Failed to save reality entries to localStorage:', error);
     }
   }, [journalData.realityEntries, year]);
 
@@ -169,28 +185,78 @@ export function useJournalData(year: number): UseJournalDataReturn {
     }
   }, [journalData.lastSyncTimestamp, year]);
 
-  // Internal database loading function
-  const loadFromDatabaseInternal = useCallback(async () => {
+  // Internal database loading function with conflict resolution
+  const loadFromDatabaseInternal = useCallback(async (
+    localPlanEntries?: JournalEntries,
+    localRealityEntries?: JournalEntries,
+    localLastSync?: Date | null
+  ) => {
     try {
       const dailySnapshot = await journalAPI.getDailySnapshot(year);
-      if (dailySnapshot) {
+      if (!dailySnapshot) {
+        console.log('📥 No database snapshot found, will create on first save');
+        return;
+      }
+
+      // Conflict resolution: merge local and database data
+      // If local data is newer (modified after last sync), keep it; otherwise use database
+      const dbPlanEntries = dailySnapshot.latest_plan_contents || {};
+      const dbRealityEntries = dailySnapshot.latest_reality_contents || {};
+
+      // Check if we have local changes that are newer
+      const hasLocalChanges = localPlanEntries || localRealityEntries;
+      const dbLastUpdated = dailySnapshot.updated_at ? new Date(dailySnapshot.updated_at) : null;
+
+      let finalPlanEntries = dbPlanEntries;
+      let finalRealityEntries = dbRealityEntries;
+
+      if (hasLocalChanges && localLastSync && dbLastUpdated) {
+        // If local sync is newer than db, prefer local (user made changes offline)
+        if (localLastSync > dbLastUpdated) {
+          console.log('⚠️ Local data is newer than database, keeping local changes');
+          finalPlanEntries = localPlanEntries || {};
+          finalRealityEntries = localRealityEntries || {};
+          // Trigger save to sync local changes to database
+          setTimeout(() => {
+            if (localPlanEntries && Object.keys(localPlanEntries).length > 0) {
+              journalAPI.saveSnapshot('plan', localPlanEntries, year).catch(console.error);
+            }
+            if (localRealityEntries && Object.keys(localRealityEntries).length > 0) {
+              journalAPI.saveSnapshot('reality', localRealityEntries, year).catch(console.error);
+            }
+          }, 100);
+        } else {
+          console.log('📥 Database data is newer, using database');
+        }
+      } else {
+        console.log('📥 No local changes or timestamps, using database');
+      }
+
+      if (isMountedRef.current) {
         setJournalData(prev => ({
           ...prev,
-          planEntries: dailySnapshot.latest_plan_contents,
-          realityEntries: dailySnapshot.latest_reality_contents,
+          planEntries: finalPlanEntries,
+          realityEntries: finalRealityEntries,
           lastSyncTimestamp: new Date()
         }));
-        console.log('📥 Loaded latest data from database');
       }
+
+      console.log('📥 Loaded data from database:', {
+        planCount: Object.keys(finalPlanEntries).length,
+        realityCount: Object.keys(finalRealityEntries).length
+      });
     } catch (error) {
       console.error('Failed to load from database:', error);
       throw error;
     }
   }, [year]);
 
-  // Auto-save to database (debounced)
-  const autoSaveToDatabase = useCallback(async (mode: JournalMode, entries: JournalEntries) => {
-    if (!journalData.isOnline) return;
+  // Auto-save to database (debounced) - uses ref to avoid stale closure
+  const autoSaveToDatabase = useCallback((mode: JournalMode, entries: JournalEntries, isOnline: boolean) => {
+    if (!isOnline) {
+      console.log(`⏸️ Skipping auto-save for ${mode} (offline)`);
+      return;
+    }
 
     // Clear existing timer
     if (autoSaveTimerRef.current) {
@@ -200,17 +266,38 @@ export function useJournalData(year: number): UseJournalDataReturn {
     // Set new timer
     autoSaveTimerRef.current = setTimeout(async () => {
       try {
+        console.log(`🔄 Auto-saving ${mode} to database...`);
         await journalAPI.saveSnapshot(mode, entries, year);
-        setJournalData(prev => ({
-          ...prev,
-          lastSyncTimestamp: new Date()
-        }));
-        console.log(`🔄 Auto-saved ${mode} to database`);
+
+        if (isMountedRef.current) {
+          setJournalData(prev => ({
+            ...prev,
+            lastSyncTimestamp: new Date()
+          }));
+        }
+
+        console.log(`✅ Auto-saved ${mode} to database successfully`);
       } catch (error) {
-        console.error(`Failed to auto-save ${mode} to database:`, error);
+        console.error(`❌ Failed to auto-save ${mode} to database:`, error);
+        // Retry once after 5 seconds
+        setTimeout(async () => {
+          try {
+            console.log(`🔄 Retrying auto-save for ${mode}...`);
+            await journalAPI.saveSnapshot(mode, entries, year);
+            if (isMountedRef.current) {
+              setJournalData(prev => ({
+                ...prev,
+                lastSyncTimestamp: new Date()
+              }));
+            }
+            console.log(`✅ Retry successful for ${mode}`);
+          } catch (retryError) {
+            console.error(`❌ Retry failed for ${mode}:`, retryError);
+          }
+        }, 5000);
       }
     }, 2000); // 2-second debounce
-  }, [journalData.isOnline, year]);
+  }, [year]);
 
   const setCurrentMode = useCallback((mode: JournalMode) => {
     setJournalData(prev => ({ ...prev, currentMode: mode }));
@@ -233,8 +320,8 @@ export function useJournalData(year: number): UseJournalDataReturn {
           delete updatedData.planEntries[dayKey];
         }
 
-        // Auto-save to database
-        autoSaveToDatabase('plan', updatedData.planEntries);
+        // Auto-save to database with current state
+        autoSaveToDatabase('plan', updatedData.planEntries, prev.isOnline);
       } else {
         updatedData.realityEntries = {
           ...prev.realityEntries,
@@ -245,13 +332,13 @@ export function useJournalData(year: number): UseJournalDataReturn {
           delete updatedData.realityEntries[dayKey];
         }
 
-        // Auto-save to database
-        autoSaveToDatabase('reality', updatedData.realityEntries);
+        // Auto-save to database with current state
+        autoSaveToDatabase('reality', updatedData.realityEntries, prev.isOnline);
       }
 
       return updatedData;
     });
-  }, [autoSaveToDatabase]);
+  }, [year, autoSaveToDatabase]);
 
   const getCurrentEntries = useCallback((): JournalEntries => {
     return journalData.currentMode === 'plan'
@@ -297,9 +384,12 @@ export function useJournalData(year: number): UseJournalDataReturn {
     await loadFromDatabaseInternal();
   }, [journalData.isOnline, loadFromDatabaseInternal]);
 
-  // Cleanup timers
+  // Cleanup timers and set mounted flag
   useEffect(() => {
+    isMountedRef.current = true;
+
     return () => {
+      isMountedRef.current = false;
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       }
