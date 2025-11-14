@@ -6,10 +6,23 @@
 
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
-import { config } from "dotenv";
+import { readFileSync } from "fs";
+import { join } from "path";
 
-// Load environment variables
-config();
+// Load environment variables from .env file
+try {
+  const envFile = readFileSync(join(process.cwd(), '.env'), 'utf-8');
+  envFile.split('\n').forEach(line => {
+    const match = line.match(/^([^=:#]+)=(.*)$/);
+    if (match) {
+      const key = match[1].trim();
+      const value = match[2].trim().replace(/^["']|["']$/g, '');
+      process.env[key] = value;
+    }
+  });
+} catch (error) {
+  console.log("⚠️  No .env file found, using existing environment variables");
+}
 
 // Configure WebSocket
 neonConfig.webSocketConstructor = ws;
