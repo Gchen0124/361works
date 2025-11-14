@@ -12,6 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "db:test": "tsx scripts/test-neon-connection.ts",
+    "db:setup": "tsx scripts/create-default-user.ts",
     "smoke": "tsx server/tools/smoke.ts"
   },
   "dependencies": {
