@@ -1,21 +1,21 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, index, serial, timestamp, jsonb, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Users table
-export const users = sqliteTable("users", {
-  id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
+export const users = pgTable("users", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()::text`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
-  created_at: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  created_at: timestamp("created_at").defaultNow(),
 });
 
 // Journal Plan Matrix - stores 365-day planning snapshots with timestamps
-export const journalPlanMatrix = sqliteTable("journal_plan_matrix", {
-  id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
-  user_id: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  snapshot_timestamp: integer("snapshot_timestamp", { mode: "timestamp" }).notNull(),
+export const journalPlanMatrix = pgTable("journal_plan_matrix", {
+  id: serial("id").primaryKey(),
+  user_id: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  snapshot_timestamp: timestamp("snapshot_timestamp").notNull(),
   year: integer("year").notNull(),
   // 365 individual day columns
   day_001: text("day_001"),
@@ -384,18 +384,18 @@ export const journalPlanMatrix = sqliteTable("journal_plan_matrix", {
   day_364: text("day_364"),
   day_365: text("day_365"),
   total_planned_days: integer("total_planned_days").default(0),
-  metadata: text("metadata", { mode: "json" }), // { mood, tags, etc. }
-  created_at: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  metadata: jsonb("metadata"), // { mood, tags, etc. }
+  created_at: timestamp("created_at").defaultNow(),
 }, (table) => ({
   userTimestampIdx: index("idx_plan_user_timestamp").on(table.user_id, table.snapshot_timestamp),
   userYearIdx: index("idx_plan_user_year").on(table.user_id, table.year),
 }));
 
 // Journal Reality Matrix - stores 365-day reality snapshots with timestamps
-export const journalRealityMatrix = sqliteTable("journal_reality_matrix", {
-  id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
-  user_id: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  snapshot_timestamp: integer("snapshot_timestamp", { mode: "timestamp" }).notNull(),
+export const journalRealityMatrix = pgTable("journal_reality_matrix", {
+  id: serial("id").primaryKey(),
+  user_id: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  snapshot_timestamp: timestamp("snapshot_timestamp").notNull(),
   year: integer("year").notNull(),
   // 365 individual day columns
   day_001: text("day_001"),
@@ -764,50 +764,50 @@ export const journalRealityMatrix = sqliteTable("journal_reality_matrix", {
   day_364: text("day_364"),
   day_365: text("day_365"),
   total_reality_days: integer("total_reality_days").default(0),
-  metadata: text("metadata", { mode: "json" }),
-  created_at: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  metadata: jsonb("metadata"),
+  created_at: timestamp("created_at").defaultNow(),
 }, (table) => ({
   userTimestampIdx: index("idx_reality_user_timestamp").on(table.user_id, table.snapshot_timestamp),
   userYearIdx: index("idx_reality_user_year").on(table.user_id, table.year),
 }));
 
 // Daily Snapshots - latest plan/reality content per day for quick access
-export const dailySnapshots = sqliteTable("daily_snapshots", {
-  id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
-  user_id: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  snapshot_date: integer("snapshot_date", { mode: "timestamp" }).notNull(), // Date of the snapshot
+export const dailySnapshots = pgTable("daily_snapshots", {
+  id: serial("id").primaryKey(),
+  user_id: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  snapshot_date: timestamp("snapshot_date").notNull(), // Date of the snapshot
   year: integer("year").notNull(),
   // Latest content for each day (daily data)
-  latest_plan_contents: text("latest_plan_contents", { mode: "json" }).notNull(),
-  latest_reality_contents: text("latest_reality_contents", { mode: "json" }).notNull(),
+  latest_plan_contents: jsonb("latest_plan_contents").notNull(),
+  latest_reality_contents: jsonb("latest_reality_contents").notNull(),
   // Latest content for each week (weekly data) - week_001 to week_053
-  latest_weekly_plan_contents: text("latest_weekly_plan_contents", { mode: "json" }),
-  latest_weekly_reality_contents: text("latest_weekly_reality_contents", { mode: "json" }),
+  latest_weekly_plan_contents: jsonb("latest_weekly_plan_contents"),
+  latest_weekly_reality_contents: jsonb("latest_weekly_reality_contents"),
   // Timestamps of latest updates
-  plan_last_updated: integer("plan_last_updated", { mode: "timestamp" }),
-  reality_last_updated: integer("reality_last_updated", { mode: "timestamp" }),
-  weekly_plan_last_updated: integer("weekly_plan_last_updated", { mode: "timestamp" }),
-  weekly_reality_last_updated: integer("weekly_reality_last_updated", { mode: "timestamp" }),
+  plan_last_updated: timestamp("plan_last_updated"),
+  reality_last_updated: timestamp("reality_last_updated"),
+  weekly_plan_last_updated: timestamp("weekly_plan_last_updated"),
+  weekly_reality_last_updated: timestamp("weekly_reality_last_updated"),
   // Statistics
   completion_rate: integer("completion_rate").default(0), // % of daily plans that became reality
   weekly_completion_rate: integer("weekly_completion_rate").default(0), // % of weekly plans that became reality
-  created_at: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
-  updated_at: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
 }, (table) => ({
   userDateIdx: index("idx_daily_user_date").on(table.user_id, table.snapshot_date),
   userYearIdx: index("idx_daily_user_year").on(table.user_id, table.year),
 }));
 
 // Timeline Index - for Time Machine smooth scrolling
-export const timelineIndex = sqliteTable("timeline_index", {
-  id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
-  user_id: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  timestamp: integer("timestamp", { mode: "timestamp" }).notNull(),
+export const timelineIndex = pgTable("timeline_index", {
+  id: serial("id").primaryKey(),
+  user_id: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  timestamp: timestamp("timestamp").notNull(),
   year: integer("year").notNull(),
   entry_type: text("entry_type").notNull(), // 'plan' or 'reality'
   changes_count: integer("changes_count").default(0), // How many days were modified
   description: text("description"), // Auto-generated: "Updated 3 days of planning"
-  created_at: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  created_at: timestamp("created_at").defaultNow(),
 }, (table) => ({
   userTimelineIdx: index("idx_timeline_user_timestamp").on(table.user_id, table.timestamp),
   userYearTypeIdx: index("idx_timeline_user_year_type").on(table.user_id, table.year, table.entry_type),

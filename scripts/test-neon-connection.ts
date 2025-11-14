@@ -1,0 +1,72 @@
+#!/usr/bin/env tsx
+/**
+ * Test Neon Database Connection Script
+ * Run this to verify your Neon database is connected and migrations are applied
+ */
+
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import ws from "ws";
+import { config } from "dotenv";
+
+// Load environment variables
+config();
+
+// Configure WebSocket
+neonConfig.webSocketConstructor = ws;
+
+async function testConnection() {
+  console.log("🔍 Testing Neon database connection...\n");
+
+  if (!process.env.DATABASE_URL) {
+    console.error("❌ ERROR: DATABASE_URL environment variable is not set!");
+    console.error("   Please add DATABASE_URL to your .env file");
+    process.exit(1);
+  }
+
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+  try {
+    // Test basic connection
+    console.log("1️⃣  Testing database connection...");
+    const client = await pool.connect();
+    console.log("   ✅ Connected successfully!\n");
+
+    // Check tables exist
+    console.log("2️⃣  Checking if tables exist...");
+    const tablesResult = await client.query(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+      ORDER BY table_name;
+    `);
+
+    if (tablesResult.rows.length === 0) {
+      console.log("   ⚠️  No tables found. Run migrations first:");
+      console.log("   npm run db:push\n");
+    } else {
+      console.log(`   ✅ Found ${tablesResult.rows.length} tables:`);
+      tablesResult.rows.forEach((row: any) => {
+        console.log(`      - ${row.table_name}`);
+      });
+      console.log();
+    }
+
+    // Test query
+    console.log("3️⃣  Testing query execution...");
+    const testQuery = await client.query("SELECT NOW() as current_time");
+    console.log(`   ✅ Query successful! Server time: ${testQuery.rows[0].current_time}\n`);
+
+    client.release();
+
+    console.log("✨ All tests passed! Your Neon database is ready to use.\n");
+    process.exit(0);
+  } catch (error) {
+    console.error("❌ Connection test failed:");
+    console.error(error);
+    process.exit(1);
+  } finally {
+    await pool.end();
+  }
+}
+
+testConnection();

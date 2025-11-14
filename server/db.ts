@@ -1,25 +1,29 @@
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import { migrate } from "drizzle-orm/neon-serverless/migrator";
 import * as schema from "@shared/schema";
+import ws from "ws";
 
-const sqlite = new Database(process.env.LOCAL_SQLITE_PATH || "./data/dailyglass.db");
-sqlite.pragma("journal_mode = WAL");
+// Configure WebSocket for local development (Neon requires WebSockets)
+neonConfig.webSocketConstructor = ws;
 
-export const db = drizzle(sqlite, { schema });
-
-// Run migrations on startup - skip if tables already exist
-try {
-  const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
-  const tableNames = tables.map((t: any) => t.name);
-
-  if (!tableNames.includes('journal_plan_matrix') || !tableNames.includes('journal_reality_matrix')) {
-    migrate(db, { migrationsFolder: "./drizzle" });
-    console.log("✅ Database migrations completed successfully");
-  } else {
-    console.log("✅ Database tables already exist, skipping migrations");
-  }
-} catch (error) {
-  console.warn("⚠️  Database migration warning:", error);
-  console.log("📄 Continuing with existing database schema...");
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL environment variable is not set");
 }
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const db = drizzle(pool, { schema });
+
+// Run migrations on startup
+async function runMigrations() {
+  try {
+    console.log("🔄 Running database migrations...");
+    await migrate(db, { migrationsFolder: "./drizzle" });
+    console.log("✅ Database migrations completed successfully");
+  } catch (error) {
+    console.warn("⚠️  Database migration warning:", error);
+    console.log("📄 Continuing with existing database schema...");
+  }
+}
+
+runMigrations();
