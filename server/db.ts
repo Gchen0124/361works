@@ -3,6 +3,27 @@ import { Pool, neonConfig } from "@neondatabase/serverless";
 import { migrate } from "drizzle-orm/neon-serverless/migrator";
 import * as schema from "@shared/schema";
 import ws from "ws";
+import { readFileSync } from "fs";
+import { join } from "path";
+
+// Load environment variables from .env file (for local development)
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    const envFile = readFileSync(join(process.cwd(), '.env'), 'utf-8');
+    envFile.split('\n').forEach(line => {
+      const match = line.match(/^([^=:#]+)=(.*)$/);
+      if (match) {
+        const key = match[1].trim();
+        const value = match[2].trim().replace(/^["']|["']$/g, '');
+        if (!process.env[key]) {
+          process.env[key] = value;
+        }
+      }
+    });
+  } catch (error) {
+    // .env file not found, continue with existing env vars (production)
+  }
+}
 
 // Configure WebSocket for local development (Neon requires WebSockets)
 neonConfig.webSocketConstructor = ws;
