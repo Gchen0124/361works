@@ -13,6 +13,7 @@
     "db:studio": "drizzle-kit studio",
     "db:test": "tsx scripts/test-neon-connection.ts",
     "db:setup": "tsx scripts/create-default-user.ts",
+    "db:diagnose": "tsx scripts/diagnose-data-saving.ts",
     "smoke": "tsx server/tools/smoke.ts"
   },
   "dependencies": {
