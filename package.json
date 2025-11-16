@@ -14,6 +14,7 @@
     "db:test": "tsx scripts/test-neon-connection.ts",
     "db:setup": "tsx scripts/create-default-user.ts",
     "db:diagnose": "tsx scripts/diagnose-data-saving.ts",
+    "test:e2e": "tsx scripts/test-e2e.ts",
     "smoke": "tsx server/tools/smoke.ts"
   },
   "dependencies": {
