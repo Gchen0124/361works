@@ -54,6 +54,14 @@ export class JournalAPI {
       }
     };
 
+    // Debug logging
+    console.log(`🚀 API saveSnapshot called for ${mode} with ${Object.keys(entries).length} entries`);
+    const sampleKeys = Object.keys(entries).slice(0, 5);
+    console.log(`   Sample day keys: ${sampleKeys.join(', ')}`);
+    sampleKeys.forEach(key => {
+      console.log(`   ${key}: "${entries[key]?.substring(0, 50)}..."`);
+    });
+
     try {
       const response = await apiRequest('POST', `${this.baseURL}${endpoint}`, snapshot);
       const result = await response.json();

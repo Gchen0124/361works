@@ -257,6 +257,7 @@ export function useJournalData(year: number): UseJournalDataReturn {
 
   const updateEntry = useCallback((date: Date, content: string) => {
     const dayKey = dateToDay(date, year);
+    console.log(`✏️ Editing ${dayKey}: "${content.substring(0, 50)}..."`);
 
     setJournalData(prev => {
       const updatedData = { ...prev };
@@ -270,9 +271,6 @@ export function useJournalData(year: number): UseJournalDataReturn {
         if (!content.trim()) {
           delete updatedData.planEntries[dayKey];
         }
-
-        // Auto-save to database
-        autoSaveToDatabase('plan', updatedData.planEntries);
       } else {
         updatedData.realityEntries = {
           ...prev.realityEntries,
@@ -282,14 +280,34 @@ export function useJournalData(year: number): UseJournalDataReturn {
         if (!content.trim()) {
           delete updatedData.realityEntries[dayKey];
         }
-
-        // Auto-save to database
-        autoSaveToDatabase('reality', updatedData.realityEntries);
       }
 
       return updatedData;
     });
-  }, [autoSaveToDatabase]);
+
+    // Trigger auto-save AFTER state update with a small delay to ensure state is updated
+    setTimeout(() => {
+      const mode = journalData.currentMode;
+      const entries = mode === 'plan' ? journalData.planEntries : journalData.realityEntries;
+
+      // Create updated entries with the new content
+      const updatedEntries = {
+        ...entries,
+        [dayKey]: content
+      };
+
+      // Remove if empty
+      if (!content.trim()) {
+        delete updatedEntries[dayKey];
+      }
+
+      console.log(`📤 Triggering auto-save for ${dayKey} in ${mode} mode`);
+      console.log(`📊 Total entries to save: ${Object.keys(updatedEntries).length}`);
+      console.log(`🔍 ${dayKey} value in save data: "${updatedEntries[dayKey]?.substring(0, 50)}..."`);
+
+      autoSaveToDatabase(mode, updatedEntries);
+    }, 100); // Small delay to let state update
+  }, [year, journalData.currentMode, journalData.planEntries, journalData.realityEntries, autoSaveToDatabase]);
 
   const getCurrentEntries = useCallback((): JournalEntries => {
     return journalData.currentMode === 'plan'
