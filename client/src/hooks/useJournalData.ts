@@ -38,6 +38,18 @@ function migrateOldFormatToNewFormat(entries: Record<string, string>, year: numb
   return migratedEntries;
 }
 
+// Helper function to load and migrate data from localStorage
+function loadFromLocalStorage(key: string, year: number): JournalEntries {
+  const savedData = localStorage.getItem(key);
+  if (!savedData) return {};
+  try {
+    return migrateOldFormatToNewFormat(JSON.parse(savedData), year);
+  } catch (error) {
+    console.error(`Failed to parse localStorage data for ${key}:`, error);
+    return {};
+  }
+}
+
 interface JournalData {
   planEntries: JournalEntries;
   realityEntries: JournalEntries;
@@ -84,19 +96,11 @@ export function useJournalData(year: number): UseJournalDataReturn {
     }
   }, []);
 
-  // Load data from localStorage and optionally from database
+  // Load data from localStorage and database (prioritizing database)
   useEffect(() => {
     const loadJournalData = async () => {
       try {
-        // Load plan entries
-        const savedPlanEntries = localStorage.getItem(`journal-plan-${year}`);
-        const planEntries = savedPlanEntries ? migrateOldFormatToNewFormat(JSON.parse(savedPlanEntries), year) : {};
-
-        // Load reality entries
-        const savedRealityEntries = localStorage.getItem(`journal-reality-${year}`);
-        const realityEntries = savedRealityEntries ? migrateOldFormatToNewFormat(JSON.parse(savedRealityEntries), year) : {};
-
-        // Load current mode preference
+        // Load current mode preference from localStorage first
         const savedMode = localStorage.getItem('journal-current-mode') as JournalMode;
         const currentMode = savedMode || 'plan';
 
@@ -104,30 +108,64 @@ export function useJournalData(year: number): UseJournalDataReturn {
         const lastSyncStr = localStorage.getItem(`journal-last-sync-${year}`);
         const lastSyncTimestamp = lastSyncStr ? new Date(lastSyncStr) : null;
 
+        // Check connectivity first
+        const isOnline = await checkConnectivity();
+
+        let planEntries: JournalEntries = {};
+        let realityEntries: JournalEntries = {};
+
+        if (isOnline) {
+          // PRIORITY 1: Try to load from database if online
+          try {
+            console.log('🌐 Online - loading from database...');
+            const dailySnapshot = await journalAPI.getDailySnapshot(year);
+            if (dailySnapshot) {
+              planEntries = dailySnapshot.latest_plan_contents || {};
+              realityEntries = dailySnapshot.latest_reality_contents || {};
+              console.log(`✅ Loaded from database: ${Object.keys(planEntries).length} plan, ${Object.keys(realityEntries).length} reality entries`);
+
+              // Update localStorage with fresh database data
+              if (Object.keys(planEntries).length > 0) {
+                localStorage.setItem(`journal-plan-${year}`, JSON.stringify(planEntries));
+              }
+              if (Object.keys(realityEntries).length > 0) {
+                localStorage.setItem(`journal-reality-${year}`, JSON.stringify(realityEntries));
+              }
+              localStorage.setItem(`journal-last-sync-${year}`, new Date().toISOString());
+            } else {
+              console.log('⚠️  No data in database, falling back to localStorage...');
+              // Fallback to localStorage if no database data
+              planEntries = loadFromLocalStorage(`journal-plan-${year}`, year);
+              realityEntries = loadFromLocalStorage(`journal-reality-${year}`, year);
+            }
+          } catch (error) {
+            console.warn('⚠️  Failed to load from database, using localStorage:', error);
+            // Fallback to localStorage on error
+            planEntries = loadFromLocalStorage(`journal-plan-${year}`, year);
+            realityEntries = loadFromLocalStorage(`journal-reality-${year}`, year);
+          }
+        } else {
+          // PRIORITY 2: Load from localStorage if offline
+          console.log('📴 Offline - loading from localStorage...');
+          planEntries = loadFromLocalStorage(`journal-plan-${year}`, year);
+          realityEntries = loadFromLocalStorage(`journal-reality-${year}`, year);
+        }
+
         setJournalData({
           planEntries,
           realityEntries,
           currentMode,
-          isOnline: false, // Will be updated by connectivity check
-          lastSyncTimestamp
+          isOnline,
+          lastSyncTimestamp: isOnline ? new Date() : lastSyncTimestamp
         });
 
         console.log(`🔄 Loaded journal data for ${year}:`, {
           planCount: Object.keys(planEntries).length,
           realityCount: Object.keys(realityEntries).length,
           currentMode,
+          source: isOnline ? 'database' : 'localStorage',
           lastSync: lastSyncTimestamp?.toISOString()
         });
-
-        // Check connectivity and try to sync with database
-        const isOnline = await checkConnectivity();
-        if (isOnline) {
-          try {
-            await loadFromDatabaseInternal();
-          } catch (error) {
-            console.warn('Failed to load from database, using localStorage data:', error);
-          }
-        }
 
       } catch (error) {
         console.error('Failed to load journal data:', error);

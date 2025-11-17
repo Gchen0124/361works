@@ -29,8 +29,8 @@ export class JournalAPI {
   // Backend server URL; configurable via Vite env for local differences (e.g., 5000/5001)
   private baseURL: string = (import.meta as any)?.env?.VITE_API_BASE_URL ||
     (typeof window !== 'undefined'
-      ? `${window.location.protocol}//${window.location.hostname}:5001`
-      : 'http://localhost:5001');
+      ? `${window.location.protocol}//${window.location.hostname}:5000`
+      : 'http://localhost:5000');
 
   static getInstance(): JournalAPI {
     if (!JournalAPI.instance) {
