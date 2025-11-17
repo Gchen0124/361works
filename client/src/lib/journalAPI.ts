@@ -26,11 +26,30 @@ export interface DailySnapshot {
 export class JournalAPI {
   private static instance: JournalAPI;
   private userId: string = 'default-user'; // In a real app, this would come from auth
-  // Backend server URL; configurable via Vite env for local differences (e.g., 5000/5001)
-  private baseURL: string = (import.meta as any)?.env?.VITE_API_BASE_URL ||
-    (typeof window !== 'undefined'
-      ? `${window.location.protocol}//${window.location.hostname}:5001`
-      : 'http://localhost:5001');
+
+  // Backend server URL; automatically detects production vs development
+  private baseURL: string = this.getBaseURL();
+
+  private getBaseURL(): string {
+    // 1. Check for explicit environment variable (highest priority)
+    if ((import.meta as any)?.env?.VITE_API_BASE_URL) {
+      return (import.meta as any).env.VITE_API_BASE_URL;
+    }
+
+    // 2. Browser environment
+    if (typeof window !== 'undefined') {
+      // Production: Use same origin (no port needed - Render handles routing)
+      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        return `${window.location.protocol}//${window.location.host}`;  // ✅ Uses same host
+      }
+
+      // Local development: Use port 5001
+      return `${window.location.protocol}//${window.location.hostname}:5001`;
+    }
+
+    // 3. Server-side fallback (shouldn't reach here in practice)
+    return 'http://localhost:5001';
+  }
 
   static getInstance(): JournalAPI {
     if (!JournalAPI.instance) {

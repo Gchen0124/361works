@@ -47,4 +47,34 @@ async function runMigrations() {
   }
 }
 
-runMigrations();
+// Auto-create default user if it doesn't exist (for production)
+async function ensureDefaultUser() {
+  try {
+    const { users } = schema;
+
+    // Check if default user exists
+    const existingUser = await db.select().from(users).where(schema.eq(users.id, 'default-user')).limit(1);
+
+    if (existingUser.length === 0) {
+      console.log("🔧 Creating default user...");
+      await db.insert(users).values({
+        id: 'default-user',
+        username: 'default',
+        password: 'no-password-needed',
+      });
+      console.log("✅ Default user created successfully");
+    } else {
+      console.log("✅ Default user already exists");
+    }
+  } catch (error) {
+    console.error("⚠️  Failed to ensure default user exists:", error);
+  }
+}
+
+// Run startup tasks
+async function initializeDatabase() {
+  await runMigrations();
+  await ensureDefaultUser();
+}
+
+initializeDatabase();

@@ -233,6 +233,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // GET /api/production-diagnostics - Production environment diagnostics
+  app.get("/api/production-diagnostics", async (req, res) => {
+    try {
+      const diagnostics = {
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development',
+        database: {
+          connected: !!process.env.DATABASE_URL,
+          url_preview: process.env.DATABASE_URL
+            ? `${process.env.DATABASE_URL.substring(0, 20)}...${process.env.DATABASE_URL.substring(process.env.DATABASE_URL.length - 10)}`
+            : 'NOT SET',
+        },
+        server: {
+          port: process.env.PORT || '5001',
+          platform: process.platform,
+          nodeVersion: process.version,
+        },
+        defaultUser: {
+          exists: false,
+          error: null as string | null,
+        },
+      };
+
+      // Check if default user exists
+      try {
+        const user = await storage.getUser('default-user');
+        diagnostics.defaultUser.exists = !!user;
+      } catch (error) {
+        diagnostics.defaultUser.error = error instanceof Error ? error.message : 'Unknown error';
+      }
+
+      res.json(diagnostics);
+    } catch (error) {
+      console.error("Production diagnostics error:", error);
+      res.status(500).json({
+        error: "Failed to get diagnostics",
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // GET /api/debug/:userId/:year - Debug information
   app.get("/api/debug/:userId/:year", async (req, res) => {
     try {
