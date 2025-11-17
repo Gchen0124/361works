@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Export Journal Data from localStorage</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 { color: #333; }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 5px;
+    }
+    button:hover { background: #45a049; }
+    button.secondary {
+      background: #2196F3;
+    }
+    button.secondary:hover {
+      background: #0b7dda;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      max-height: 400px;
+    }
+    .stats {
+      background: #e3f2fd;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 15px 0;
+    }
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 15px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📦 Export Your Journal Data</h1>
+
+    <div class="warning">
+      <strong>⚠️ Important:</strong> Make sure you're on the same domain where you used the journal app!
+      <br>Your data is stored in this browser's localStorage.
+    </div>
+
+    <div class="stats" id="stats">
+      <strong>Scanning localStorage...</strong>
+    </div>
+
+    <button onclick="exportAll()">📥 Export All Data as JSON</button>
+    <button onclick="showData()" class="secondary">👀 Preview Data</button>
+    <button onclick="copyToClipboard()" class="secondary">📋 Copy to Clipboard</button>
+
+    <div id="output"></div>
+  </div>
+
+  <script>
+    let exportData = {};
+
+    function scanLocalStorage() {
+      const stats = {
+        planYears: [],
+        realityYears: [],
+        totalPlanDays: 0,
+        totalRealityDays: 0
+      };
+
+      exportData = {
+        timestamp: new Date().toISOString(),
+        source: 'localStorage',
+        data: {}
+      };
+
+      // Scan for journal data
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+
+        if (key.startsWith('journal-')) {
+          const value = localStorage.getItem(key);
+          exportData.data[key] = value;
+
+          // Parse and count
+          if (key.startsWith('journal-plan-')) {
+            const year = key.replace('journal-plan-', '');
+            stats.planYears.push(year);
+            try {
+              const entries = JSON.parse(value);
+              stats.totalPlanDays += Object.keys(entries).length;
+            } catch (e) {}
+          } else if (key.startsWith('journal-reality-')) {
+            const year = key.replace('journal-reality-', '');
+            stats.realityYears.push(year);
+            try {
+              const entries = JSON.parse(value);
+              stats.totalRealityDays += Object.keys(entries).length;
+            } catch (e) {}
+          }
+        }
+      }
+
+      return stats;
+    }
+
+    function updateStats() {
+      const stats = scanLocalStorage();
+      const statsDiv = document.getElementById('stats');
+
+      if (stats.planYears.length === 0 && stats.realityYears.length === 0) {
+        statsDiv.innerHTML = `
+          <strong>⚠️ No journal data found in localStorage</strong><br>
+          Make sure you're on the correct domain where you used the app.
+        `;
+        statsDiv.style.background = '#ffebee';
+      } else {
+        statsDiv.innerHTML = `
+          <strong>✅ Found journal data!</strong><br>
+          📅 Plan data for years: ${stats.planYears.join(', ')}<br>
+          📊 Total plan days: ${stats.totalPlanDays}<br>
+          📅 Reality data for years: ${stats.realityYears.join(', ')}<br>
+          📊 Total reality days: ${stats.totalRealityDays}<br>
+        `;
+      }
+    }
+
+    function exportAll() {
+      scanLocalStorage();
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `journal-backup-${new Date().toISOString().split('T')[0]}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      alert('✅ Data exported! Check your Downloads folder.');
+    }
+
+    function showData() {
+      scanLocalStorage();
+      const output = document.getElementById('output');
+      output.innerHTML = `
+        <h3>📄 Your Data Preview:</h3>
+        <pre>${JSON.stringify(exportData, null, 2)}</pre>
+      `;
+    }
+
+    function copyToClipboard() {
+      scanLocalStorage();
+      const dataStr = JSON.stringify(exportData, null, 2);
+      navigator.clipboard.writeText(dataStr).then(() => {
+        alert('✅ Data copied to clipboard!');
+      }).catch(() => {
+        alert('❌ Failed to copy. Try the Export button instead.');
+      });
+    }
+
+    // Auto-scan on load
+    window.addEventListener('load', updateStats);
+  </script>
+</body>
+</html>

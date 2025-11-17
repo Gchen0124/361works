@@ -12,6 +12,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:setup": "tsx server/tools/setup-database.ts",
+    "migrate-local-data": "tsx server/tools/migrate-localStorage-to-neon.ts",
     "smoke": "tsx server/tools/smoke.ts"
   },
   "dependencies": {
