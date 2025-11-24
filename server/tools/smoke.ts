@@ -43,7 +43,7 @@ async function run() {
 
   // Insert a plan snapshot
   await storage.createPlanSnapshot({
-    user_id: userId,
+    userId: userId,
     snapshot_timestamp: new Date(),
     year,
     day_contents: makeDayContents("Plan"),

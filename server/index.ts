@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { initializeDatabase } from "./db";
+
 
 const app = express();
 
@@ -12,9 +12,9 @@ const corsOptions =
   allowAllCors || app.get("env") === "development"
     ? { origin: true, credentials: true }
     : {
-        origin: ["http://localhost:5173", "http://localhost:3000", "http://localhost:5137"],
-        credentials: true,
-      };
+      origin: ["http://localhost:5173", "http://localhost:3000", "http://localhost:5137"],
+      credentials: true,
+    };
 app.use(cors(corsOptions));
 
 app.use(express.json());
@@ -52,7 +52,7 @@ app.use((req, res, next) => {
 
 (async () => {
   // Initialize database connection
-  await initializeDatabase();
+  // await initializeDatabase();
 
   const server = await registerRoutes(app);
 

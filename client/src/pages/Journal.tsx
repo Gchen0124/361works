@@ -5,8 +5,8 @@ import CollapsibleSidebar from '@/components/CollapsibleSidebar';
 import { Button } from '@/components/ui/button';
 import { Moon, Sun, BookOpen, ChevronRight, ChevronLeft, Target, CheckCircle } from 'lucide-react';
 import { useJournalData, type JournalMode } from '@/hooks/useJournalData';
-import { useTimeMachine } from '/src/hooks/useTimeMachine.ts';
-import TimeMachineBar from '/src/components/TimeMachineBar.tsx';
+import { useTimeMachine } from '@/hooks/useTimeMachine';
+import TimeMachineBar from '@/components/TimeMachineBar';
 
 export default function Journal() {
   const [visibleBlocks, setVisibleBlocks] = useState(30);
@@ -14,6 +14,10 @@ export default function Journal() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const currentYear = new Date().getFullYear();
 
+  // Fix type mismatch by using any for now or defining correct interface
+  interface JournalProps {
+    day_contents: any;
+  }
   // Use the new journal data hook for plan/reality separation
   const {
     planEntries,
@@ -87,7 +91,7 @@ export default function Journal() {
   };
 
   return (
-    <div 
+    <div
       className={`
         min-h-screen transition-all duration-500 ease-out
         bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100
@@ -119,16 +123,14 @@ export default function Journal() {
               <div>
                 <h1 className="text-xl font-bold text-foreground flex items-center gap-2" data-testid="app-title">
                   365 Journal
-                  <span className={`text-sm px-2 py-1 rounded-full font-medium ${
-                    currentMode === 'plan'
-                      ? 'bg-indigo-500/20 text-indigo-300'
-                      : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
-                  }`}>
+                  <span className={`text-sm px-2 py-1 rounded-full font-medium ${currentMode === 'plan'
+                    ? 'bg-indigo-500/20 text-indigo-300'
+                    : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                    }`}>
                     {currentMode === 'plan' ? 'PLAN' : 'REALITY'}
                   </span>
-                  <div className={`w-2 h-2 rounded-full ${
-                    isOnline ? 'bg-green-500' : 'bg-red-500'
-                  }`} title={isOnline ? 'Connected to database' : 'Offline - using localStorage only'} />
+                  <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'
+                    }`} title={isOnline ? 'Connected to database' : 'Offline - using localStorage only'} />
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   {currentMode === 'plan'
@@ -143,7 +145,7 @@ export default function Journal() {
                 </p>
               </div>
             </div>
-            
+
             <Button
               variant="ghost"
               size="icon"
@@ -220,7 +222,7 @@ export default function Journal() {
             year={currentYear}
             isDarkMode={isDarkMode}
             entries={effectiveEntries()}
-            onContentChange={isTimeMachine ? () => {} : updateEntry}
+            onContentChange={isTimeMachine ? () => { } : updateEntry}
             currentMode={currentMode}
             readOnly={isTimeMachine}
             compareMode={!isTimeMachine && compareMode}

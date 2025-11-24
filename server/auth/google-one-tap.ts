@@ -52,14 +52,12 @@ export async function handleGoogleOneTap(req: Request, res: Response) {
 
     // Create new user if doesn't exist
     if (!user) {
-      const profile: GoogleProfile = {
-        id: googlePayload.sub,
+      user = await storage.createGoogleUser({
+        googleId: googlePayload.sub, // Changed from 'id' to 'googleId'
         email: googlePayload.email,
         displayName: googlePayload.name,
         photos: googlePayload.picture ? [{ value: googlePayload.picture }] : undefined,
-      };
-
-      user = await storage.createGoogleUser(profile);
+      });
       console.log(`✅ Created new user via Google One Tap: ${user.email}`);
     }
 

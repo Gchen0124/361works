@@ -1,19 +1,14 @@
-import type { Config } from "drizzle-kit";
+import { defineConfig } from "drizzle-kit";
 
-// Support both local development and Turso production
-const isProduction = process.env.NODE_ENV === 'production' && process.env.TURSO_DATABASE_URL;
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is missing");
+}
 
-export default {
-  schema: "./shared/schema.ts",
+export default defineConfig({
   out: "./drizzle",
-  dialect: "sqlite",
-  driver: isProduction ? "turso" : undefined,
-  dbCredentials: isProduction
-    ? {
-        url: process.env.TURSO_DATABASE_URL!,
-        authToken: process.env.TURSO_AUTH_TOKEN!,
-      }
-    : {
-        url: process.env.LOCAL_SQLITE_PATH || "./data/dailyglass.db",
-      },
-} satisfies Config;
+  schema: "./shared/schema.ts",
+  dialect: "postgresql",
+  dbCredentials: {
+    url: process.env.DATABASE_URL,
+  },
+});

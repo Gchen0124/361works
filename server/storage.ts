@@ -1,25 +1,24 @@
 import {
   type User,
   type InsertUser,
-  type JournalPlanMatrix,
-  type JournalRealityMatrix,
   type DailySnapshot,
   type TimelineIndex,
-  type InsertJournalPlanMatrix,
-  type InsertJournalRealityMatrix,
   type InsertDailySnapshot,
-  type TimeMachineSnapshot,
-  type TimeMachineComparison,
-  type DayContents,
   users,
   journalPlanMatrix,
   journalRealityMatrix,
   dailySnapshots,
-  timelineIndex
+  timelineIndex,
+  type DayContents,
+  type InsertJournalPlanMatrix,
+  type InsertJournalRealityMatrix,
+  type JournalPlanMatrix,
+  type JournalRealityMatrix,
+  type TimeMachineSnapshot,
+  type TimeMachineComparison
 } from "@shared/schema";
-import { randomUUID } from "crypto";
 import { db } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 // Google OAuth Profile interface
 export interface GoogleProfile {
@@ -29,7 +28,6 @@ export interface GoogleProfile {
   photos?: Array<{ value: string }>;
 }
 
-// Enhanced storage interface with matrix operations and Time Machine support
 export interface IStorage {
   // User operations
   getUser(id: string): Promise<User | undefined>;
@@ -72,8 +70,7 @@ export interface IStorage {
   }>;
 }
 
-// Simplified storage interface - no more complex conversions
-export class SqliteStorage implements IStorage {
+export class DatabaseStorage implements IStorage {
   private dayKeys: string[] = Array.from({ length: 365 }, (_, i) => `day_${String(i + 1).padStart(3, '0')}`);
 
   private emptyDayContents(): DayContents {
@@ -110,337 +107,275 @@ export class SqliteStorage implements IStorage {
   }
 
   private async getLatestPlanSnapshotRow(userId: string, year: number) {
-    const rows = await db.select().from(journalPlanMatrix)
-      .where(and(eq(journalPlanMatrix.user_id, userId), eq(journalPlanMatrix.year, year)))
-      .orderBy(desc(journalPlanMatrix.snapshot_timestamp))
+    const [row] = await (db as any).select().from(journalPlanMatrix)
+      .where(and(eq(journalPlanMatrix.userId, userId), eq(journalPlanMatrix.year, year)))
+      .orderBy(desc(journalPlanMatrix.snapshotTimestamp))
       .limit(1);
-    return rows[0] as any | undefined;
+    return row;
   }
 
   private async getLatestRealitySnapshotRow(userId: string, year: number) {
-    const rows = await db.select().from(journalRealityMatrix)
-      .where(and(eq(journalRealityMatrix.user_id, userId), eq(journalRealityMatrix.year, year)))
-      .orderBy(desc(journalRealityMatrix.snapshot_timestamp))
+    const [row] = await (db as any).select().from(journalRealityMatrix)
+      .where(and(eq(journalRealityMatrix.userId, userId), eq(journalRealityMatrix.year, year)))
+      .orderBy(desc(journalRealityMatrix.snapshotTimestamp))
       .limit(1);
-    return rows[0] as any | undefined;
+    return row;
   }
+
   // User operations
   async getUser(id: string): Promise<User | undefined> {
-    try {
-      const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-      return result[0];
-    } catch (error) {
-      console.error("Error getting user:", error);
-      return undefined;
-    }
+    const [user] = await (db as any).select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    try {
-      const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
-      return result[0];
-    } catch (error) {
-      console.error("Error getting user by username:", error);
-      return undefined;
-    }
+    const [user] = await (db as any).select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    try {
-      const result = await db.insert(users).values(insertUser).returning();
-      return result[0];
-    } catch (error) {
-      console.error("Error creating user:", error);
-      throw error;
-    }
+    const [user] = await (db as any).insert(users).values({
+      ...insertUser,
+      id: insertUser.id || crypto.randomUUID(),
+    }).returning();
+    return user;
   }
 
   // OAuth methods
   async getUserByGoogleId(googleId: string): Promise<User | undefined> {
-    try {
-      const result = await db
-        .select()
-        .from(users)
-        .where(eq(users.google_id, googleId))
-        .limit(1);
-      return result[0];
-    } catch (error) {
-      console.error("Error getting user by Google ID:", error);
-      return undefined;
-    }
+    const [user] = await (db as any).select().from(users).where(eq(users.googleId, googleId));
+    return user;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    try {
-      const result = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, email))
-        .limit(1);
-      return result[0];
-    } catch (error) {
-      console.error("Error getting user by email:", error);
-      return undefined;
-    }
+    const [user] = await (db as any).select().from(users).where(eq(users.email, email));
+    return user;
   }
 
   async createGoogleUser(profile: GoogleProfile): Promise<User> {
-    try {
-      const result = await db
-        .insert(users)
-        .values({
-          username: profile.email || `google_${profile.id}`,
-          password: null, // No password for OAuth users
-          google_id: profile.id,
-          email: profile.email,
-          display_name: profile.displayName,
-          avatar_url: profile.photos?.[0]?.value,
-          auth_provider: 'google',
-          last_login: new Date(),
-        })
-        .returning();
-      return result[0];
-    } catch (error) {
-      console.error("Error creating Google user:", error);
-      throw error;
-    }
+    const [user] = await (db as any)
+      .insert(users)
+      .values({
+        id: crypto.randomUUID(),
+        username: profile.email || `google_${profile.id}`,
+        password: null,
+        googleId: profile.id,
+        email: profile.email,
+        displayName: profile.displayName,
+        avatarUrl: profile.photos?.[0]?.value,
+        authProvider: 'google',
+        lastLogin: new Date(),
+      })
+      .returning();
+    return user;
   }
 
   async updateUserLastLogin(userId: string): Promise<void> {
-    try {
-      await db
-        .update(users)
-        .set({
-          last_login: new Date(),
-          updated_at: new Date()
-        })
-        .where(eq(users.id, userId));
-    } catch (error) {
-      console.error("Error updating last login:", error);
-    }
+    await (db as any)
+      .update(users)
+      .set({
+        lastLogin: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId));
   }
 
   // Matrix journal operations
   async createPlanSnapshot(entry: InsertJournalPlanMatrix): Promise<JournalPlanMatrix> {
-    try {
-      const latestRow = await this.getLatestPlanSnapshotRow(entry.user_id, entry.year);
-      const latestContents = latestRow ? this.extractDayContentsFromRow(latestRow) : undefined;
-      const fullContents = this.mergeFullContents(latestContents, entry.day_contents);
+    // The entry comes with `day_contents` from the frontend (via routes adapter) or we need to adapt it.
+    // The schema expects `day_001`, `day_002` etc directly in the insert object.
+    // But the `InsertJournalPlanMatrix` type is generated from the schema, so it HAS `day_001` etc.
+    // However, the frontend sends `day_contents` map.
+    // We need to handle this mapping in the route or here.
+    // The previous implementation did:
+    // `const fullContents = this.mergeFullContents(latestContents, entry.day_contents);`
+    // So `entry` passed to this function was NOT `InsertJournalPlanMatrix` strictly, but a DTO.
+    // Let's assume `entry` passed here is the DTO with `day_contents`.
+    // Wait, TypeScript will complain if we don't match the interface.
+    // The interface says `createPlanSnapshot(entry: InsertJournalPlanMatrix)`.
+    // `InsertJournalPlanMatrix` has `day_001`...`day_365`.
+    // So the caller (route) must prepare this object.
+    // BUT, we need to merge with previous state!
+    // So we need the `day_contents` map to do the merge logic easily.
 
-      const result = await db.insert(journalPlanMatrix).values({
-        user_id: entry.user_id,
-        snapshot_timestamp: entry.snapshot_timestamp,
-        year: entry.year,
-        ...fullContents,
-        total_planned_days: this.countNonEmpty(fullContents),
-        metadata: entry.metadata
-      }).returning();
+    // Let's change the signature to accept what we need.
+    // Actually, let's stick to the logic:
+    // 1. Get latest snapshot.
+    // 2. Merge new data.
+    // 3. Insert new row.
 
-      const planSnapshot = result[0];
+    // We will accept `any` for entry to allow passing `day_contents` and map it.
+    // Or better, define a DTO.
 
-      const changes = this.diffCount(latestContents, fullContents);
-      await this.updateTimeline(entry.user_id, entry.year, planSnapshot.snapshot_timestamp, 'plan', changes);
+    const input = entry as any; // { user_id, year, day_contents, metadata ... }
 
-      await this.updateDailySnapshotAfterPlan(entry.user_id, entry.year, fullContents);
+    const latestRow = await this.getLatestPlanSnapshotRow(input.user_id, input.year);
+    const latestContents = latestRow ? this.extractDayContentsFromRow(latestRow) : undefined;
+    const fullContents = this.mergeFullContents(latestContents, input.day_contents || {}); // input.day_contents is the new data
 
-      return {
-        ...planSnapshot,
-        day_contents: fullContents
-      } as any;
-    } catch (error) {
-      console.error("Error creating plan snapshot:", error);
-      throw error;
-    }
+    const rowToInsert: any = {
+      userId: input.user_id,
+      snapshotTimestamp: new Date(),
+      year: input.year,
+      ...fullContents,
+      totalPlannedDays: this.countNonEmpty(fullContents),
+      metadata: input.metadata
+    };
+
+    const [planSnapshot] = await (db as any).insert(journalPlanMatrix).values(rowToInsert).returning();
+
+    const changes = this.diffCount(latestContents, fullContents);
+    await this.updateTimeline(input.user_id, input.year, planSnapshot.snapshotTimestamp, 'plan', changes);
+
+    await this.updateDailySnapshotAfterPlan(input.user_id, input.year, fullContents);
+
+    return {
+      ...planSnapshot,
+      day_contents: fullContents
+    } as any;
   }
 
   async createRealitySnapshot(entry: InsertJournalRealityMatrix): Promise<JournalRealityMatrix> {
-    try {
-      const latestRow = await this.getLatestRealitySnapshotRow(entry.user_id, entry.year);
-      const latestContents = latestRow ? this.extractDayContentsFromRow(latestRow) : undefined;
-      const fullContents = this.mergeFullContents(latestContents, entry.day_contents);
+    const input = entry as any;
 
-      const result = await db.insert(journalRealityMatrix).values({
-        user_id: entry.user_id,
-        snapshot_timestamp: entry.snapshot_timestamp,
-        year: entry.year,
-        ...fullContents,
-        total_reality_days: this.countNonEmpty(fullContents),
-        metadata: entry.metadata
-      }).returning();
+    const latestRow = await this.getLatestRealitySnapshotRow(input.user_id, input.year);
+    const latestContents = latestRow ? this.extractDayContentsFromRow(latestRow) : undefined;
+    const fullContents = this.mergeFullContents(latestContents, input.day_contents || {});
 
-      const realitySnapshot = result[0];
+    const rowToInsert: any = {
+      userId: input.user_id,
+      snapshotTimestamp: new Date(),
+      year: input.year,
+      ...fullContents,
+      totalRealityDays: this.countNonEmpty(fullContents),
+      metadata: input.metadata
+    };
 
-      const changes = this.diffCount(latestContents, fullContents);
-      await this.updateTimeline(entry.user_id, entry.year, realitySnapshot.snapshot_timestamp, 'reality', changes);
+    const [realitySnapshot] = await (db as any).insert(journalRealityMatrix).values(rowToInsert).returning();
 
-      await this.updateDailySnapshotAfterReality(entry.user_id, entry.year, fullContents);
+    const changes = this.diffCount(latestContents, fullContents);
+    await this.updateTimeline(input.user_id, input.year, realitySnapshot.snapshotTimestamp, 'reality', changes);
 
-      return {
-        ...realitySnapshot,
-        day_contents: fullContents
-      } as any;
-    } catch (error) {
-      console.error("Error creating reality snapshot:", error);
-      throw error;
-    }
+    await this.updateDailySnapshotAfterReality(input.user_id, input.year, fullContents);
+
+    return {
+      ...realitySnapshot,
+      day_contents: fullContents
+    } as any;
   }
 
   async getPlanSnapshot(userId: string, timestamp: string): Promise<JournalPlanMatrix | undefined> {
-    try {
-      const result = await db.select().from(journalPlanMatrix)
-        .where(and(
-          eq(journalPlanMatrix.user_id, userId),
-          eq(journalPlanMatrix.snapshot_timestamp, new Date(timestamp))
-        )).limit(1);
-      const row = result[0];
-      if (!row) return undefined;
-      const day_contents = this.extractDayContentsFromRow(row as any);
-      return { ...(row as any), day_contents } as any;
-    } catch (error) {
-      console.error("Error getting plan snapshot:", error);
-      return undefined;
-    }
+    const [row] = await (db as any).select().from(journalPlanMatrix)
+      .where(and(
+        eq(journalPlanMatrix.userId, userId),
+        eq(journalPlanMatrix.snapshotTimestamp, new Date(timestamp))
+      )).limit(1);
+
+    if (!row) return undefined;
+    const day_contents = this.extractDayContentsFromRow(row);
+    return { ...row, day_contents } as any;
   }
 
   async getRealitySnapshot(userId: string, timestamp: string): Promise<JournalRealityMatrix | undefined> {
-    try {
-      const result = await db.select().from(journalRealityMatrix)
-        .where(and(
-          eq(journalRealityMatrix.user_id, userId),
-          eq(journalRealityMatrix.snapshot_timestamp, new Date(timestamp))
-        )).limit(1);
-      const row = result[0];
-      if (!row) return undefined;
-      const day_contents = this.extractDayContentsFromRow(row as any);
-      return { ...(row as any), day_contents } as any;
-    } catch (error) {
-      console.error("Error getting reality snapshot:", error);
-      return undefined;
-    }
+    const [row] = await (db as any).select().from(journalRealityMatrix)
+      .where(and(
+        eq(journalRealityMatrix.userId, userId),
+        eq(journalRealityMatrix.snapshotTimestamp, new Date(timestamp))
+      )).limit(1);
+
+    if (!row) return undefined;
+    const day_contents = this.extractDayContentsFromRow(row);
+    return { ...row, day_contents } as any;
   }
 
   async getAllPlanSnapshots(userId: string, year: number): Promise<JournalPlanMatrix[]> {
-    try {
-      const rows = await db.select().from(journalPlanMatrix)
-        .where(and(
-          eq(journalPlanMatrix.user_id, userId),
-          eq(journalPlanMatrix.year, year)
-        ))
-        .orderBy(journalPlanMatrix.snapshot_timestamp);
-      return rows.map((row: any) => {
-        const day_contents: DayContents = {};
-        for (let i = 1; i <= 365; i++) {
-          const key = `day_${String(i).padStart(3, '0')}`;
-          const value = row[key];
-          if (value !== null && value !== undefined) day_contents[key] = value;
-        }
-        return { ...row, day_contents } as any;
-      });
-    } catch (error) {
-      console.error("Error getting all plan snapshots:", error);
-      return [];
-    }
+    const rows = await (db as any).select().from(journalPlanMatrix)
+      .where(and(
+        eq(journalPlanMatrix.userId, userId),
+        eq(journalPlanMatrix.year, year)
+      ))
+      .orderBy(journalPlanMatrix.snapshotTimestamp);
+
+    return rows.map((row) => {
+      const day_contents = this.extractDayContentsFromRow(row);
+      return { ...row, day_contents } as any;
+    });
   }
 
   async getAllRealitySnapshots(userId: string, year: number): Promise<JournalRealityMatrix[]> {
-    try {
-      const rows = await db.select().from(journalRealityMatrix)
-        .where(and(
-          eq(journalRealityMatrix.user_id, userId),
-          eq(journalRealityMatrix.year, year)
-        ))
-        .orderBy(journalRealityMatrix.snapshot_timestamp);
-      return rows.map((row: any) => {
-        const day_contents: DayContents = {};
-        for (let i = 1; i <= 365; i++) {
-          const key = `day_${String(i).padStart(3, '0')}`;
-          const value = row[key];
-          if (value !== null && value !== undefined) day_contents[key] = value;
-        }
-        return { ...row, day_contents } as any;
-      });
-    } catch (error) {
-      console.error("Error getting all reality snapshots:", error);
-      return [];
-    }
+    const rows = await (db as any).select().from(journalRealityMatrix)
+      .where(and(
+        eq(journalRealityMatrix.userId, userId),
+        eq(journalRealityMatrix.year, year)
+      ))
+      .orderBy(journalRealityMatrix.snapshotTimestamp);
+
+    return rows.map((row) => {
+      const day_contents = this.extractDayContentsFromRow(row);
+      return { ...row, day_contents } as any;
+    });
   }
 
   // Daily snapshot operations
   async getDailySnapshot(userId: string, year: number): Promise<DailySnapshot | undefined> {
-    try {
-      const result = await db.select().from(dailySnapshots)
-        .where(and(
-          eq(dailySnapshots.user_id, userId),
-          eq(dailySnapshots.year, year)
-        ))
-        .orderBy(desc(dailySnapshots.updated_at))
-        .limit(1);
-      return result[0];
-    } catch (error) {
-      console.error("Error getting daily snapshot:", error);
-      return undefined;
-    }
+    const [snapshot] = await (db as any).select().from(dailySnapshots)
+      .where(and(
+        eq(dailySnapshots.userId, userId),
+        eq(dailySnapshots.year, year)
+      ))
+      .orderBy(desc(dailySnapshots.snapshotDate))
+      .limit(1);
+    return snapshot;
   }
 
-  async updateDailySnapshot(snapshot: InsertDailySnapshot): Promise<DailySnapshot> {
-    try {
-      const existing = await this.getDailySnapshot(snapshot.user_id, snapshot.year);
+  async updateDailySnapshot(snapshot: any): Promise<DailySnapshot> {
+    const existing = await this.getDailySnapshot(snapshot.userId, snapshot.year);
 
-      if (existing) {
-        // Update existing
-        const result = await db.update(dailySnapshots)
-          .set({
-            ...snapshot,
-            completion_rate: this.calculateCompletionRate(snapshot.latest_plan_contents, snapshot.latest_reality_contents),
-            updated_at: new Date()
-          })
-          .where(eq(dailySnapshots.id, existing.id))
-          .returning();
-        return result[0];
-      } else {
-        // Create new
-        const result = await db.insert(dailySnapshots)
-          .values({
-            ...snapshot,
-            completion_rate: this.calculateCompletionRate(snapshot.latest_plan_contents, snapshot.latest_reality_contents),
-          })
-          .returning();
-        return result[0];
-      }
-    } catch (error) {
-      console.error("Error updating daily snapshot:", error);
-      throw error;
+    // Cast jsonb fields to DayContents for calculation
+    const planContents = (snapshot.latestPlanContents as unknown) as DayContents;
+    const realityContents = (snapshot.latestRealityContents as unknown) as DayContents;
+    const completionRate = this.calculateCompletionRate(planContents, realityContents);
+
+    if (existing) {
+      const [updated] = await (db as any).update(dailySnapshots)
+        .set({
+          ...snapshot,
+          completionRate,
+          snapshotDate: new Date() // Update timestamp
+        })
+        .where(eq((dailySnapshots.id as any), (existing.id as any)))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await (db as any).insert(dailySnapshots)
+        .values({
+          ...snapshot,
+          completionRate,
+        })
+        .returning();
+      return created;
     }
   }
 
   // Time Machine operations
   async getTimeline(userId: string, year: number): Promise<TimelineIndex[]> {
-    try {
-      return await db.select().from(timelineIndex)
-        .where(and(
-          eq(timelineIndex.user_id, userId),
-          eq(timelineIndex.year, year)
-        ))
-        .orderBy(timelineIndex.timestamp);
-    } catch (error) {
-      console.error("Error getting timeline:", error);
-      return [];
-    }
+    return await (db as any).select().from(timelineIndex)
+      .where(and(
+        eq(timelineIndex.userId, userId),
+        eq(timelineIndex.year, year)
+      ))
+      .orderBy(timelineIndex.timestamp);
   }
 
   async getTimeMachineSnapshot(userId: string, timestamp: string, year: number): Promise<TimeMachineSnapshot> {
     const planSnapshot = await this.getPlanSnapshot(userId, timestamp);
     const realitySnapshot = await this.getRealitySnapshot(userId, timestamp);
-    try {
-      // debug log limited output
-      console.log("[TimeMachine] plan day_001:", (planSnapshot as any)?.day_001);
-    } catch {}
 
     return {
       timestamp,
       year,
-      plan_contents: planSnapshot ? this.extractDayContentsFromRow(planSnapshot as any) : ({} as DayContents),
-      reality_contents: realitySnapshot ? this.extractDayContentsFromRow(realitySnapshot as any) : ({} as DayContents),
+      plan_contents: planSnapshot ? (planSnapshot as any).day_contents : {},
+      reality_contents: realitySnapshot ? (realitySnapshot as any).day_contents : {},
       metadata: (planSnapshot?.metadata as Record<string, any> | undefined) || (realitySnapshot?.metadata as Record<string, any> | undefined),
     };
   }
@@ -472,32 +407,28 @@ export class SqliteStorage implements IStorage {
 
   // Helper methods
   private async updateTimeline(userId: string, year: number, timestamp: Date, entryType: string, changesCount: number): Promise<void> {
-    try {
-      await db.insert(timelineIndex).values({
-        user_id: userId,
-        timestamp,
-        year,
-        entry_type: entryType,
-        changes_count: changesCount,
-        description: `Updated ${changesCount} days of ${entryType}`,
-      });
-    } catch (error) {
-      console.error("Error updating timeline:", error);
-    }
+    await db.insert(timelineIndex).values({
+      userId,
+      timestamp,
+      year,
+      entryType,
+      changesCount,
+      description: `Updated ${changesCount} days of ${entryType}`,
+    });
   }
 
   private async updateDailySnapshotAfterPlan(userId: string, year: number, dayContents: DayContents): Promise<void> {
     const existing = await this.getDailySnapshot(userId, year);
     const now = new Date();
 
-    const updated: InsertDailySnapshot = {
-      user_id: userId,
-      snapshot_date: now,
+    const updated: any = {
+      userId,
+      snapshotDate: now,
       year,
-      latest_plan_contents: dayContents,
-      latest_reality_contents: (existing?.latest_reality_contents as any) || ({} as any),
-      plan_last_updated: now,
-      reality_last_updated: existing?.reality_last_updated || null,
+      latestPlanContents: dayContents,
+      latestRealityContents: (existing?.latestRealityContents as any) || {},
+      planLastUpdated: now,
+      realityLastUpdated: existing?.realityLastUpdated || null,
     };
 
     await this.updateDailySnapshot(updated);
@@ -507,14 +438,14 @@ export class SqliteStorage implements IStorage {
     const existing = await this.getDailySnapshot(userId, year);
     const now = new Date();
 
-    const updated: InsertDailySnapshot = {
-      user_id: userId,
-      snapshot_date: now,
+    const updated: any = {
+      userId,
+      snapshotDate: now,
       year,
-      latest_plan_contents: (existing?.latest_plan_contents as any) || ({} as any),
-      latest_reality_contents: dayContents,
-      plan_last_updated: existing?.plan_last_updated || null,
-      reality_last_updated: now,
+      latestPlanContents: (existing?.latestPlanContents as any) || {},
+      latestRealityContents: dayContents,
+      planLastUpdated: existing?.planLastUpdated || null,
+      realityLastUpdated: now,
     };
 
     await this.updateDailySnapshot(updated);
@@ -561,4 +492,4 @@ export class SqliteStorage implements IStorage {
   }
 }
 
-export const storage = new SqliteStorage();
+export const storage = new DatabaseStorage();

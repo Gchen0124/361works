@@ -7,6 +7,8 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Journal from "@/pages/Journal";
 import { LoginPage } from "@/pages/LoginPage";
 import NotFound from "@/pages/not-found";
+import { useEffect } from "react";
+import { autoMigrateIfNeeded } from "@/lib/migrateLocalStorage";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, loading } = useAuth();
@@ -43,6 +45,11 @@ function Router() {
 }
 
 function App() {
+  // Run localStorage migration on app startup
+  useEffect(() => {
+    autoMigrateIfNeeded();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

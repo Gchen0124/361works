@@ -24,14 +24,12 @@ export async function handleGoogleCallback(
 
     // 3. Create new user if doesn't exist
     if (!user) {
-      const googleProfile: GoogleProfile = {
-        id: profile.id,
-        email: profile.emails?.[0]?.value || '',
-        displayName: profile.displayName,
-        photos: profile.photos,
-      };
-
-      user = await storage.createGoogleUser(googleProfile);
+      user = await storage.createGoogleUser({
+        id: profile.id as string,
+        email: (profile.emails?.[0]?.value ?? "") as string,
+        displayName: (profile.displayName ?? "") as string,
+        photos: profile.photos as any
+      });
       console.log(`✅ Created new Google user: ${user.email}`);
     }
 
